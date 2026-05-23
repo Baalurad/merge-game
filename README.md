@@ -1,40 +1,40 @@
-# Слияния
+# Merge Game
 
-Merge-игра для Светланы. PWA — устанавливается на iPad через Safari без App Store.
+A casual merge puzzle game. Runs as a PWA — installs on iPad via Safari, no App Store required.
 
-## Запуск локально
+## Run locally
 
 ```bash
 python -m http.server 8765
 ```
 
-Открыть: http://localhost:8765
+Open: http://localhost:8765
 
-## Деплой (первый раз)
+## Deploy (first time)
 
-1. Залить репо на GitHub (уже сделано)
+1. Push repo to GitHub (already done)
 2. GitHub → Settings → Pages → Branch: **master** / **(root)** → Save
-3. Через ~1 мин игра доступна по адресу:  
+3. Game will be live at:  
    `https://baalurad.github.io/merge-game/`
 
-## Установка на iPad
+## Install on iPad
 
-1. Открыть ссылку выше в **Safari**
-2. Кнопка «Поделиться» → **На экран «Домой»**
-3. Готово — иконка на рабочем столе, работает офлайн
+1. Open the link above in **Safari**
+2. Tap Share → **Add to Home Screen**
+3. Done — works offline from the home screen icon
 
-## Выпустить патч
+## Release a patch
 
-1. Внести изменения в код
-2. Обновить версию в `version.js`:
+1. Make your changes
+2. Bump the version in `version.js`:
    ```js
    const APP_VERSION = '0.0.2';
    ```
-3. Запушить:
+3. Push:
    ```bash
    git add .
-   git commit -m "v0.0.2: описание изменений"
+   git commit -m "v0.0.2: description of changes"
    git push
    ```
 
-Светлана получит обновление при следующем открытии приложения (при включённом интернете).
+The player gets the update on the next app launch (with internet on).

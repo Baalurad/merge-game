@@ -59,10 +59,10 @@ class GameScene extends Phaser.Scene {
 
     createUI() {
         this.add.rectangle(360, 50, 720, 100, 0x16213e);
-        this.scoreText = this.add.text(24, 28, 'Очки: 0', {
+        this.scoreText = this.add.text(24, 28, 'Score: 0', {
             fontSize: '28px', fill: '#ffffff', fontFamily: 'Arial', fontStyle: 'bold',
         });
-        this.highScoreText = this.add.text(696, 28, `Рекорд: ${this.highScore}`, {
+        this.highScoreText = this.add.text(696, 28, `Best: ${this.highScore}`, {
             fontSize: '22px', fill: '#aaaaaa', fontFamily: 'Arial',
         }).setOrigin(1, 0);
 
@@ -230,8 +230,8 @@ class GameScene extends Phaser.Scene {
                     this.highScore = this.score;
                     localStorage.setItem('mergeHighScore', String(this.highScore));
                 }
-                this.scoreText.setText(`Очки: ${this.score}`);
-                this.highScoreText.setText(`Рекорд: ${this.highScore}`);
+                this.scoreText.setText(`Score: ${this.score}`);
+                this.highScoreText.setText(`Best: ${this.highScore}`);
 
                 this.updateGrid();
 
@@ -315,14 +315,14 @@ class GameScene extends Phaser.Scene {
     showGameOver() {
         const cx = 360, cy = 540;
         this.add.rectangle(cx, cy, 400, 240, 0x000000, 0.85).setDepth(10);
-        this.add.text(cx, cy - 70, 'Игра окончена!', {
+        this.add.text(cx, cy - 70, 'Game Over!', {
             fontSize: '36px', fill: '#ffffff', fontFamily: 'Arial', fontStyle: 'bold',
         }).setOrigin(0.5).setDepth(11);
-        this.add.text(cx, cy - 10, `Очки: ${this.score}`, {
+        this.add.text(cx, cy - 10, `Score: ${this.score}`, {
             fontSize: '28px', fill: '#f1c40f', fontFamily: 'Arial',
         }).setOrigin(0.5).setDepth(11);
 
-        const btn = this.add.text(cx, cy + 60, '[ Ещё раз ]', {
+        const btn = this.add.text(cx, cy + 60, '[ Play Again ]', {
             fontSize: '30px', fill: '#2ecc71', fontFamily: 'Arial', fontStyle: 'bold',
         }).setOrigin(0.5).setDepth(11).setInteractive();
         btn.on('pointerdown', () => this.scene.restart());
