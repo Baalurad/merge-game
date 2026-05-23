@@ -3,35 +3,50 @@ class GameScene extends Phaser.Scene {
         super({ key: 'GameScene' });
     }
 
+    preload() {
+        for (let i = 1; i <= 8; i++) {
+            this.load.image(`ring_${i}`, `assets/rings/ring_${i}.png`);
+            this.load.image(`book_${i}`, `assets/books/book_${i}.png`);
+        }
+    }
+
     create() {
         this.COLS = 7;
         this.ROWS = 7;
         this.GAP = 8;
+        this.PANEL_H = 130;
+        this.MAX_CUSTOMERS = 4;
 
         const cellW = Math.floor((680 - (this.COLS - 1) * this.GAP) / this.COLS);
         const cellH = Math.floor((940 - (this.ROWS - 1) * this.GAP) / this.ROWS);
         this.CELL_SIZE = Math.min(cellW, cellH, 98);
+        this.ELEM_SCALE = (this.CELL_SIZE - 12) / 64;
 
         const gridW = this.COLS * this.CELL_SIZE + (this.COLS - 1) * this.GAP;
         const gridH = this.ROWS * this.CELL_SIZE + (this.ROWS - 1) * this.GAP;
         this.offsetX = (720 - gridW) / 2;
-        this.offsetY = 100 + (980 - gridH) / 2;
+        this.offsetY = 100 + this.PANEL_H + ((980 - this.PANEL_H) - gridH) / 2;
 
-        // Each basket type: color of the basket cell, label color, element colors per level
+        // Each basket type: color, label color, sprite key prefix for levels 1-8
         this.BASKET_CONFIGS = [
             {
                 color: 0xf39c12,
                 labelColor: '#1a1a2e',
-                elemColors: [null, 0xe74c3c, 0xe67e22, 0xf1c40f, 0x27ae60, 0xf39c12, 0xd35400, 0xc0392b, 0xffd700],
+                elemTextColor: '#ffffff',
+                spritePrefix: 'ring',
             },
             {
                 color: 0x8e44ad,
                 labelColor: '#ffffff',
-                elemColors: [null, 0x3498db, 0x1abc9c, 0x2980b9, 0x8e44ad, 0x9b59b6, 0x6c3483, 0x1a5276, 0xd2b4de],
+                elemTextColor: '#000000',
+                spritePrefix: 'book',
             },
         ];
 
         this.LABELS = ['', '1', '2', '3', '4', '5', '6', '7', '★'];
+
+        this.customers = [];
+        this.slotOccupied = new Array(this.MAX_CUSTOMERS).fill(false);
 
         this.score = 0;
         this.highScore = parseInt(localStorage.getItem('mergeHighScore') || '0');
@@ -55,12 +70,14 @@ class GameScene extends Phaser.Scene {
         this.board = [];
         this.initBoard();
         this.createUI();
+        this.createCustomerPanel();
         this.createGrid();
         this.updateGrid();
 
         this.input.on('pointerdown', this.onPointerDown, this);
         this.input.on('pointermove', this.onPointerMove, this);
         this.input.on('pointerup', this.onPointerUp, this);
+        this.startCustomerSpawner();
     }
 
     initBoard() {
@@ -98,8 +115,14 @@ class GameScene extends Phaser.Scene {
                 const bg = this.add.rectangle(x, y, s, s, 0x16213e)
                     .setStrokeStyle(2, 0x0f3460);
 
-                const elem = this.add.rectangle(x, y, s - 12, s - 12, 0x0f3460)
+                // basketRect: shown for basket and empty cells (colored rectangle)
+                const basketRect = this.add.rectangle(x, y, s - 12, s - 12, 0x0f3460)
                     .setAlpha(0.2);
+
+                // elem: sprite image shown for level 1-8 elements
+                const elem = this.add.image(x, y, 'ring_1')
+                    .setScale(this.ELEM_SCALE)
+                    .setVisible(false);
 
                 const label = this.add.text(x, y, '', {
                     fontSize: `${Math.floor(s * 0.35)}px`,
@@ -108,7 +131,7 @@ class GameScene extends Phaser.Scene {
                     fontStyle: 'bold',
                 }).setOrigin(0.5);
 
-                this.cellObjects[r][c] = { bg, elem, label, baseX: x, baseY: y };
+                this.cellObjects[r][c] = { bg, basketRect, elem, label, baseX: x, baseY: y };
             }
         }
     }
@@ -135,22 +158,27 @@ class GameScene extends Phaser.Scene {
         if (level === -1) {
             const cfg = this.BASKET_CONFIGS[type];
             obj.bg.setStrokeStyle(2, cfg.color);
-            obj.elem.setFillStyle(cfg.color).setAlpha(1)
-                .setPosition(obj.baseX, obj.baseY).setScale(1);
+            obj.basketRect.setFillStyle(cfg.color).setAlpha(1)
+                .setPosition(obj.baseX, obj.baseY).setScale(1).setVisible(true);
+            obj.elem.setVisible(false);
             obj.label.setText('+1').setStyle({ fill: cfg.labelColor })
-                .setPosition(obj.baseX, obj.baseY).setScale(1);
+                .setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
         } else if (level === 0) {
             obj.bg.setStrokeStyle(2, 0x0f3460);
-            obj.elem.setFillStyle(0x0f3460).setAlpha(0.2)
-                .setPosition(obj.baseX, obj.baseY).setScale(1);
-            obj.label.setText('').setPosition(obj.baseX, obj.baseY).setScale(1);
+            obj.basketRect.setFillStyle(0x0f3460).setAlpha(0.2)
+                .setPosition(obj.baseX, obj.baseY).setScale(1).setVisible(true);
+            obj.elem.setVisible(false);
+            obj.label.setText('').setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
         } else {
             const cfg = this.BASKET_CONFIGS[type];
             obj.bg.setStrokeStyle(2, 0x0f3460);
-            obj.elem.setFillStyle(cfg.elemColors[level]).setAlpha(1)
-                .setPosition(obj.baseX, obj.baseY).setScale(1);
-            obj.label.setText(this.LABELS[level]).setStyle({ fill: '#ffffff' })
-                .setPosition(obj.baseX, obj.baseY).setScale(1);
+            obj.basketRect.setVisible(false);
+            obj.elem.setTexture(`${cfg.spritePrefix}_${level}`)
+                .setScale(this.ELEM_SCALE)
+                .setPosition(obj.baseX, obj.baseY)
+                .setAlpha(1).setVisible(true);
+            obj.label.setText(this.LABELS[level]).setStyle({ fill: cfg.elemTextColor })
+                .setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
         }
     }
 
@@ -216,7 +244,7 @@ class GameScene extends Phaser.Scene {
 
         if (!this.dragSrc) return;
         const cell = this.pointerToCell(pointer);
-        this.endDrag(cell);
+        this.endDrag(cell, pointer);
     }
 
     // ── DRAG ──────────────────────────────────────────────
@@ -225,13 +253,18 @@ class GameScene extends Phaser.Scene {
         this.dragSrc = { row, col, isBasket };
         const { level, type } = this.board[row][col];
         const cfg = this.BASKET_CONFIGS[type];
-        const color = isBasket ? cfg.color : cfg.elemColors[level];
         const labelText = isBasket ? '+1' : this.LABELS[level];
-        const labelColor = isBasket ? cfg.labelColor : '#ffffff';
+        const labelColor = isBasket ? cfg.labelColor : cfg.elemTextColor;
 
-        this.dragVisual = this.add.rectangle(pointer.x, pointer.y,
-            this.CELL_SIZE - 12, this.CELL_SIZE - 12, color)
-            .setDepth(20).setAlpha(0.9);
+        if (isBasket) {
+            this.dragVisual = this.add.rectangle(pointer.x, pointer.y,
+                this.CELL_SIZE - 12, this.CELL_SIZE - 12, cfg.color)
+                .setDepth(20).setAlpha(0.9);
+        } else {
+            this.dragVisual = this.add.image(pointer.x, pointer.y, `${cfg.spritePrefix}_${level}`)
+                .setScale(this.ELEM_SCALE)
+                .setDepth(20).setAlpha(0.9);
+        }
 
         this.dragLabelVisual = this.add.text(pointer.x, pointer.y, labelText, {
             fontSize: `${Math.floor(this.CELL_SIZE * 0.35)}px`,
@@ -243,7 +276,7 @@ class GameScene extends Phaser.Scene {
         obj.label.setAlpha(0.2);
     }
 
-    endDrag(targetCell) {
+    endDrag(targetCell, pointer) {
         const src = this.dragSrc;
         this.dragSrc = null;
         this.dragVisual.destroy();      this.dragVisual = null;
@@ -253,7 +286,19 @@ class GameScene extends Phaser.Scene {
         srcObj.elem.setAlpha(1);
         srcObj.label.setAlpha(1);
 
-        if (!targetCell) return;
+        if (!targetCell) {
+            if (pointer && !src.isBasket) {
+                const ci = this.pointerToCustomerIndex(pointer.x, pointer.y);
+                if (ci >= 0) {
+                    const cust = this.customers[ci];
+                    const srcCell = this.board[src.row][src.col];
+                    if (srcCell.level === cust.level && srcCell.type === cust.type) {
+                        this.fulfillOrder(ci, src.row, src.col);
+                    }
+                }
+            }
+            return;
+        }
         const { row: tr, col: tc } = targetCell;
         if (tr === src.row && tc === src.col) return;
 
@@ -305,13 +350,18 @@ class GameScene extends Phaser.Scene {
 
                 const tgtObj = this.cellObjects[tgtRow][tgtCol];
                 this.tweens.add({
-                    targets: [tgtObj.elem, tgtObj.label],
-                    scaleX: 1.25, scaleY: 1.25,
+                    targets: tgtObj.elem,
+                    scaleX: this.ELEM_SCALE * 1.25, scaleY: this.ELEM_SCALE * 1.25,
                     duration: 120, yoyo: true, ease: 'Back',
                     onComplete: () => {
                         this.isAnimating = false;
                         if (this.isGameOver()) this.time.delayedCall(400, () => this.showGameOver());
                     },
+                });
+                this.tweens.add({
+                    targets: tgtObj.label,
+                    scaleX: 1.25, scaleY: 1.25,
+                    duration: 120, yoyo: true, ease: 'Back',
                 });
             },
         });
@@ -346,8 +396,12 @@ class GameScene extends Phaser.Scene {
         obj.elem.setScale(0);
         obj.label.setScale(0);
         this.tweens.add({
-            targets: [obj.elem, obj.label],
+            targets: obj.label,
             scaleX: 1, scaleY: 1, duration: 200, ease: 'Back.Out',
+        });
+        this.tweens.add({
+            targets: obj.elem,
+            scaleX: this.ELEM_SCALE, scaleY: this.ELEM_SCALE, duration: 200, ease: 'Back.Out',
         });
     }
 
@@ -391,5 +445,110 @@ class GameScene extends Phaser.Scene {
             fontSize: '30px', fill: '#2ecc71', fontFamily: 'Arial', fontStyle: 'bold',
         }).setOrigin(0.5).setDepth(11).setInteractive();
         btn.on('pointerdown', () => this.scene.restart());
+    }
+
+    // ── CUSTOMER / ORDER SYSTEM ───────────────────────────
+
+    createCustomerPanel() {
+        const py = 100 + this.PANEL_H / 2;
+        this.add.rectangle(360, py, 720, this.PANEL_H, 0x0d1926);
+        this.add.rectangle(360, 100 + this.PANEL_H, 720, 2, 0x1a3a5c);
+        for (let i = 0; i < this.MAX_CUSTOMERS; i++) {
+            const sx = this.getSlotX(i);
+            this.add.rectangle(sx, py, 148, 110, 0x111e2e).setStrokeStyle(1, 0x1e3a5c);
+        }
+    }
+
+    getSlotX(slot) {
+        const startX = (720 - this.MAX_CUSTOMERS * 160) / 2 + 80;
+        return startX + slot * 160;
+    }
+
+    startCustomerSpawner() {
+        this.spawnCustomer();
+        this.time.addEvent({
+            delay: 20000,
+            callback: this.spawnCustomer,
+            callbackScope: this,
+            loop: true,
+        });
+    }
+
+    spawnCustomer() {
+        const slot = this.slotOccupied.indexOf(false);
+        if (slot === -1) return;
+        this.slotOccupied[slot] = true;
+
+        const type = Phaser.Math.Between(0, this.BASKET_CONFIGS.length - 1);
+        const level = Phaser.Math.Between(3, 5);
+        const sx = this.getSlotX(slot);
+        const py = 100 + this.PANEL_H / 2;
+        const cfg = this.BASKET_CONFIGS[type];
+        const EXPIRY = 45000;
+
+        const cardBg = this.add.rectangle(sx, py, 148, 110, 0x1a2e4a)
+            .setStrokeStyle(2, cfg.color).setDepth(2);
+        const elemImg = this.add.image(sx, py - 8, `${cfg.spritePrefix}_${level}`)
+            .setDisplaySize(74, 74).setDepth(3);
+        const levelLabel = this.add.text(sx, py - 8, this.LABELS[level], {
+            fontSize: '26px', fill: cfg.elemTextColor, fontFamily: 'Arial', fontStyle: 'bold',
+        }).setOrigin(0.5).setDepth(4);
+        const timerBarBg = this.add.rectangle(sx, py + 46, 120, 6, 0x0d1926).setDepth(2);
+        const timerBarFill = this.add.rectangle(sx - 60, py + 46, 120, 6, 0x27ae60)
+            .setOrigin(0, 0.5).setDepth(3);
+
+        const customer = { type, level, slot, objects: [cardBg, elemImg, levelLabel, timerBarBg, timerBarFill] };
+        this.customers.push(customer);
+
+        customer.timerTween = this.tweens.add({
+            targets: timerBarFill, scaleX: 0, duration: EXPIRY, ease: 'Linear',
+        });
+        customer.expiryTimer = this.time.addEvent({
+            delay: EXPIRY,
+            callback: () => {
+                const idx = this.customers.indexOf(customer);
+                if (idx >= 0) {
+                    this.score -= 50;
+                    this.scoreText.setText(`Score: ${this.score}`);
+                    this.removeCustomer(idx);
+                    if (this.score < 0) {
+                        this.time.delayedCall(200, () => this.showGameOver());
+                    }
+                }
+            },
+        });
+    }
+
+    removeCustomer(idx) {
+        if (idx < 0 || idx >= this.customers.length) return;
+        const customer = this.customers[idx];
+        if (customer.expiryTimer) customer.expiryTimer.remove(false);
+        if (customer.timerTween) customer.timerTween.stop();
+        for (const obj of customer.objects) obj.destroy();
+        this.slotOccupied[customer.slot] = false;
+        this.customers.splice(idx, 1);
+    }
+
+    pointerToCustomerIndex(px, py) {
+        if (py < 100 || py > 100 + this.PANEL_H) return -1;
+        for (let i = 0; i < this.customers.length; i++) {
+            const sx = this.getSlotX(this.customers[i].slot);
+            if (px >= sx - 74 && px <= sx + 74) return i;
+        }
+        return -1;
+    }
+
+    fulfillOrder(customerIndex, srcRow, srcCol) {
+        const cust = this.customers[customerIndex];
+        this.score += cust.level * 50;
+        if (this.score > this.highScore) {
+            this.highScore = this.score;
+            localStorage.setItem('mergeHighScore', String(this.highScore));
+        }
+        this.scoreText.setText(`Score: ${this.score}`);
+        this.highScoreText.setText(`Best: ${this.highScore}`);
+        this.board[srcRow][srcCol] = { level: 0, type: null };
+        this.updateCell(srcRow, srcCol);
+        this.removeCustomer(customerIndex);
     }
 }
