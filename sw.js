@@ -1,8 +1,11 @@
-const CACHE_NAME = 'merge-game-v1';
+importScripts('./version.js');
+
+const CACHE_NAME = `merge-game-${APP_VERSION}`;
 const ASSETS = [
     '/merge-game/',
     '/merge-game/index.html',
     '/merge-game/manifest.json',
+    '/merge-game/version.js',
     '/merge-game/src/main.js',
     '/merge-game/src/GameScene.js',
     'https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js',

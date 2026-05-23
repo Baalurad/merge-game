@@ -65,6 +65,10 @@ class GameScene extends Phaser.Scene {
         this.highScoreText = this.add.text(696, 28, `Рекорд: ${this.highScore}`, {
             fontSize: '22px', fill: '#aaaaaa', fontFamily: 'Arial',
         }).setOrigin(1, 0);
+
+        this.add.text(720, 1076, `v${APP_VERSION}`, {
+            fontSize: '18px', fill: '#2a2a4a', fontFamily: 'Arial',
+        }).setOrigin(1, 1);
     }
 
     createGrid() {
