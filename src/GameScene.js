@@ -39,16 +39,15 @@ class GameScene extends Phaser.Scene {
         this.isAnimating = false;
         this.spawnCooldown = false;
 
-        // Drag state
-        this.dragSrc = null;
+        // Drag state (shared between elements and baskets)
+        this.dragSrc = null;      // { row, col, isBasket }
         this.dragVisual = null;
         this.dragLabelVisual = null;
 
-        // Long-press / basket-move state
+        // Long-press state
         this.longPressTimer = null;
         this.longPressSrc = null;
-        this.basketMoveMode = null;
-        this.highlightObjects = [];
+        this.lastPointerPos = { x: 0, y: 0 };
 
         // board[r][c] = { level, type }
         // level: -1 = basket, 0 = empty, 1-8 = element
@@ -166,36 +165,33 @@ class GameScene extends Phaser.Scene {
 
     onPointerDown(pointer) {
         if (this.isAnimating) return;
+        this.lastPointerPos = { x: pointer.x, y: pointer.y };
 
         const cell = this.pointerToCell(pointer);
-
-        if (this.basketMoveMode) {
-            this.resolveBasketMove(cell);
-            return;
-        }
-
         if (!cell) return;
         const { row, col } = cell;
         const { level } = this.board[row][col];
 
         if (level === -1) {
             this.longPressSrc = { row, col };
-            this.longPressTimer = this.time.delayedCall(500, () => {
+            this.longPressTimer = this.time.delayedCall(200, () => {
                 this.longPressTimer = null;
-                this.enterBasketMoveMode(row, col);
+                this.startDrag(row, col, this.lastPointerPos, true);
             });
             return;
         }
 
         if (level > 0) {
-            this.startDrag(row, col, pointer);
+            this.startDrag(row, col, pointer, false);
         }
     }
 
     onPointerMove(pointer) {
+        this.lastPointerPos = { x: pointer.x, y: pointer.y };
+
         if (this.longPressTimer && this.longPressSrc) {
             const { x: bx, y: by } = this.getCellPos(this.longPressSrc.row, this.longPressSrc.col);
-            if (Math.abs(pointer.x - bx) > 20 || Math.abs(pointer.y - by) > 20) {
+            if (Math.abs(pointer.x - bx) > 15 || Math.abs(pointer.y - by) > 15) {
                 this.longPressTimer.remove();
                 this.longPressTimer = null;
                 this.longPressSrc = null;
@@ -223,73 +219,23 @@ class GameScene extends Phaser.Scene {
         this.endDrag(cell);
     }
 
-    // ── BASKET MOVE ────────────────────────────────────────
-
-    enterBasketMoveMode(row, col) {
-        this.basketMoveMode = { row, col };
-        const obj = this.cellObjects[row][col];
-        this.tweens.add({
-            targets: obj.elem,
-            scaleX: 1.15, scaleY: 1.15,
-            duration: 300, yoyo: true, repeat: -1,
-        });
-        this.showMoveHighlights();
-    }
-
-    showMoveHighlights() {
-        this.clearHighlights();
-        const { row: br, col: bc } = this.basketMoveMode;
-        for (let r = 0; r < this.ROWS; r++) {
-            for (let c = 0; c < this.COLS; c++) {
-                if (r === br && c === bc) continue;
-                if (this.board[r][c].level === 0) {
-                    const { x, y } = this.getCellPos(r, c);
-                    this.highlightObjects.push(
-                        this.add.rectangle(x, y, this.CELL_SIZE - 4, this.CELL_SIZE - 4, 0xffffff, 0.12).setDepth(5)
-                    );
-                }
-            }
-        }
-    }
-
-    clearHighlights() {
-        for (const h of this.highlightObjects) h.destroy();
-        this.highlightObjects = [];
-    }
-
-    resolveBasketMove(cell) {
-        const src = this.basketMoveMode;
-        const srcObj = this.cellObjects[src.row][src.col];
-        this.tweens.killTweensOf(srcObj.elem);
-        srcObj.elem.setScale(1);
-        this.clearHighlights();
-        this.basketMoveMode = null;
-
-        if (!cell) return;
-        const { row, col } = cell;
-        if (row === src.row && col === src.col) return;
-        if (this.board[row][col].level !== 0) return;
-
-        this.board[row][col] = { ...this.board[src.row][src.col] };
-        this.board[src.row][src.col] = { level: 0, type: null };
-        this.updateCell(src.row, src.col);
-        this.updateCell(row, col);
-    }
-
     // ── DRAG ──────────────────────────────────────────────
 
-    startDrag(row, col, pointer) {
-        this.dragSrc = { row, col };
+    startDrag(row, col, pointer, isBasket) {
+        this.dragSrc = { row, col, isBasket };
         const { level, type } = this.board[row][col];
-        const color = this.BASKET_CONFIGS[type].elemColors[level];
+        const cfg = this.BASKET_CONFIGS[type];
+        const color = isBasket ? cfg.color : cfg.elemColors[level];
+        const labelText = isBasket ? '+1' : this.LABELS[level];
+        const labelColor = isBasket ? cfg.labelColor : '#ffffff';
 
         this.dragVisual = this.add.rectangle(pointer.x, pointer.y,
             this.CELL_SIZE - 12, this.CELL_SIZE - 12, color)
             .setDepth(20).setAlpha(0.9);
 
-        this.dragLabelVisual = this.add.text(pointer.x, pointer.y, this.LABELS[level], {
-            fontSize: `${Math.floor(this.CELL_SIZE * 0.38)}px`,
-            fill: '#ffffff', fontFamily: 'Arial', fontStyle: 'bold',
+        this.dragLabelVisual = this.add.text(pointer.x, pointer.y, labelText, {
+            fontSize: `${Math.floor(this.CELL_SIZE * 0.35)}px`,
+            fill: labelColor, fontFamily: 'Arial', fontStyle: 'bold',
         }).setOrigin(0.5).setDepth(21);
 
         const obj = this.cellObjects[row][col];
@@ -313,6 +259,16 @@ class GameScene extends Phaser.Scene {
 
         const srcCell = this.board[src.row][src.col];
         const tgtCell = this.board[tr][tc];
+
+        if (src.isBasket) {
+            if (tgtCell.level === 0) {
+                this.board[tr][tc] = { ...srcCell };
+                this.board[src.row][src.col] = { level: 0, type: null };
+                this.updateCell(src.row, src.col);
+                this.updateCell(tr, tc);
+            }
+            return;
+        }
 
         if (tgtCell.level === srcCell.level && tgtCell.type === srcCell.type) {
             this.performMerge(src.row, src.col, tr, tc);
