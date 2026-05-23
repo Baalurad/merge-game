@@ -1,0 +1,9 @@
+{
+    "name": "Слияния",
+    "short_name": "Слияния",
+    "start_url": "/merge-game/",
+    "display": "standalone",
+    "background_color": "#1a1a2e",
+    "theme_color": "#16213e",
+    "orientation": "portrait"
+}
