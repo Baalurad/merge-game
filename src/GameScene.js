@@ -5,9 +5,11 @@ class GameScene extends Phaser.Scene {
 
     preload() {
         for (let i = 1; i <= 8; i++) {
-            this.load.image(`ring_${i}`, `assets/rings/ring_${i}.png`);
-            this.load.image(`book_${i}`, `assets/books/book_${i}.png`);
+            this.load.image(`egg_${i}`, `assets/eggs/egg_${i}.png`);
+            this.load.image(`coffee_${i}`, `assets/coffee/coffee_${i}.png`);
         }
+        this.load.image('henhouse_basket', 'assets/eggs/henhouse_basket.png');
+        this.load.image('plantation_basket', 'assets/coffee/plantation_basket.png');
     }
 
     create() {
@@ -20,7 +22,7 @@ class GameScene extends Phaser.Scene {
         const cellW = Math.floor((680 - (this.COLS - 1) * this.GAP) / this.COLS);
         const cellH = Math.floor((940 - (this.ROWS - 1) * this.GAP) / this.ROWS);
         this.CELL_SIZE = Math.min(cellW, cellH, 98);
-        this.ELEM_SCALE = (this.CELL_SIZE - 12) / 64;
+        this.ELEM_SCALE = (this.CELL_SIZE - 12) / 128;
 
         const gridW = this.COLS * this.CELL_SIZE + (this.COLS - 1) * this.GAP;
         const gridH = this.ROWS * this.CELL_SIZE + (this.ROWS - 1) * this.GAP;
@@ -33,13 +35,15 @@ class GameScene extends Phaser.Scene {
                 color: 0xf39c12,
                 labelColor: '#1a1a2e',
                 elemTextColor: '#ffffff',
-                spritePrefix: 'ring',
+                spritePrefix: 'egg',
+                basketSprite: 'henhouse_basket',
             },
             {
                 color: 0x8e44ad,
                 labelColor: '#ffffff',
                 elemTextColor: '#000000',
-                spritePrefix: 'book',
+                spritePrefix: 'coffee',
+                basketSprite: 'plantation_basket',
             },
         ];
 
@@ -120,16 +124,12 @@ class GameScene extends Phaser.Scene {
                     .setAlpha(0.2);
 
                 // elem: sprite image shown for level 1-8 elements
-                const elem = this.add.image(x, y, 'ring_1')
+                const elem = this.add.image(x, y, 'egg_1')
                     .setScale(this.ELEM_SCALE)
                     .setVisible(false);
 
-                const label = this.add.text(x, y, '', {
-                    fontSize: `${Math.floor(s * 0.35)}px`,
-                    fill: '#ffffff',
-                    fontFamily: 'Arial',
-                    fontStyle: 'bold',
-                }).setOrigin(0.5);
+                const label = this.add.text(x, y, '', this.levelLabelStyle(Math.floor(s * 0.35)))
+                    .setOrigin(0, 1);
 
                 this.cellObjects[r][c] = { bg, basketRect, elem, label, baseX: x, baseY: y };
             }
@@ -141,6 +141,16 @@ class GameScene extends Phaser.Scene {
             x: this.offsetX + col * (this.CELL_SIZE + this.GAP) + this.CELL_SIZE / 2,
             y: this.offsetY + row * (this.CELL_SIZE + this.GAP) + this.CELL_SIZE / 2,
         };
+    }
+
+    // Единый стиль цифры уровня — менять только здесь
+    levelLabelStyle(fontSize) {
+        return { fontSize: `${fontSize}px`, fill: '#ffffff', fontFamily: 'Arial', fontStyle: 'bold' };
+    }
+
+    // Позиционирует лейбл в левый нижний угол спрайта по его центру и размеру
+    placeLevelLabel(label, cx, cy, spriteSize) {
+        return label.setOrigin(0, 1).setPosition(cx - spriteSize / 2 + 4, cy + spriteSize / 2 - 4);
     }
 
     updateGrid() {
@@ -158,11 +168,18 @@ class GameScene extends Phaser.Scene {
         if (level === -1) {
             const cfg = this.BASKET_CONFIGS[type];
             obj.bg.setStrokeStyle(2, cfg.color);
-            obj.basketRect.setFillStyle(cfg.color).setAlpha(1)
-                .setPosition(obj.baseX, obj.baseY).setScale(1).setVisible(true);
-            obj.elem.setVisible(false);
-            obj.label.setText('+1').setStyle({ fill: cfg.labelColor })
-                .setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
+            obj.basketRect.setVisible(false);
+            if (cfg.basketSprite) {
+                obj.elem.setTexture(cfg.basketSprite)
+                    .setScale(this.ELEM_SCALE)
+                    .setPosition(obj.baseX, obj.baseY)
+                    .setAlpha(1).setVisible(true);
+            } else {
+                obj.basketRect.setFillStyle(cfg.color).setAlpha(1)
+                    .setPosition(obj.baseX, obj.baseY).setScale(1).setVisible(true);
+                obj.elem.setVisible(false);
+            }
+            obj.label.setText('').setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
         } else if (level === 0) {
             obj.bg.setStrokeStyle(2, 0x0f3460);
             obj.basketRect.setFillStyle(0x0f3460).setAlpha(0.2)
@@ -177,8 +194,8 @@ class GameScene extends Phaser.Scene {
                 .setScale(this.ELEM_SCALE)
                 .setPosition(obj.baseX, obj.baseY)
                 .setAlpha(1).setVisible(true);
-            obj.label.setText(this.LABELS[level]).setStyle({ fill: cfg.elemTextColor })
-                .setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
+            this.placeLevelLabel(obj.label, obj.baseX, obj.baseY, this.CELL_SIZE)
+                .setText(this.LABELS[level]).setScale(1).setAlpha(1);
         }
     }
 
@@ -433,6 +450,15 @@ class GameScene extends Phaser.Scene {
     }
 
     showGameOver() {
+        if (this.customerSpawner) this.customerSpawner.remove(false);
+        for (const c of this.customers) {
+            if (c.expiryTimer) c.expiryTimer.remove(false);
+            if (c.timerTween) c.timerTween.stop();
+        }
+        this.input.off('pointerdown', this.onPointerDown, this);
+        this.input.off('pointermove', this.onPointerMove, this);
+        this.input.off('pointerup', this.onPointerUp, this);
+
         const cx = 360, cy = 540;
         this.add.rectangle(cx, cy, 400, 240, 0x000000, 0.85).setDepth(10);
         this.add.text(cx, cy - 70, 'Game Over!', {
@@ -466,7 +492,7 @@ class GameScene extends Phaser.Scene {
 
     startCustomerSpawner() {
         this.spawnCustomer();
-        this.time.addEvent({
+        this.customerSpawner = this.time.addEvent({
             delay: 20000,
             callback: this.spawnCustomer,
             callbackScope: this,
@@ -490,9 +516,10 @@ class GameScene extends Phaser.Scene {
             .setStrokeStyle(2, cfg.color).setDepth(2);
         const elemImg = this.add.image(sx, py - 8, `${cfg.spritePrefix}_${level}`)
             .setDisplaySize(74, 74).setDepth(3);
-        const levelLabel = this.add.text(sx, py - 8, this.LABELS[level], {
-            fontSize: '26px', fill: cfg.elemTextColor, fontFamily: 'Arial', fontStyle: 'bold',
-        }).setOrigin(0.5).setDepth(4);
+        const levelLabel = this.placeLevelLabel(
+            this.add.text(0, 0, this.LABELS[level], this.levelLabelStyle(22)).setDepth(4),
+            sx, py - 8, 74
+        );
         const timerBarBg = this.add.rectangle(sx, py + 46, 120, 6, 0x0d1926).setDepth(2);
         const timerBarFill = this.add.rectangle(sx - 60, py + 46, 120, 6, 0x27ae60)
             .setOrigin(0, 0.5).setDepth(3);
