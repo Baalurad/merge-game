@@ -137,6 +137,10 @@ class GameScene extends Phaser.Scene {
         this.highScoreText = this.add.text(696, 28, `Best: ${this.highScore}`, {
             fontSize: '22px', fill: '#aaaaaa', fontFamily: 'Arial',
         }).setOrigin(1, 0);
+        this.energyText = this.add.text(360, 64, '', {
+            fontSize: '20px', fill: '#f1c40f', fontFamily: 'Arial', fontStyle: 'bold',
+        }).setOrigin(0.5, 0);
+        this.updateEnergyDisplay();
         this.add.text(720, 1276, `v${APP_VERSION}`, {
             fontSize: '18px', fill: '#2a2a4a', fontFamily: 'Arial',
         }).setOrigin(1, 1);
@@ -213,13 +217,7 @@ class GameScene extends Phaser.Scene {
                     .setPosition(obj.baseX, obj.baseY).setScale(1).setVisible(true);
                 obj.elem.setVisible(false);
             }
-            if (type === 3) {
-                this.placeLevelLabel(obj.label, obj.baseX, obj.baseY, this.CELL_SIZE)
-                    .setStyle({ fontSize: '20px', fill: '#f1c40f', fontFamily: 'Arial', fontStyle: 'bold' })
-                    .setText(`${this.rubyEnergy}`).setScale(1).setAlpha(1);
-            } else {
-                obj.label.setText('').setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
-            }
+            obj.label.setText('').setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
         } else if (level === 0) {
             obj.bg.setStrokeStyle(2, 0x0f3460);
             obj.basketRect.setFillStyle(0x0f3460).setAlpha(0.2)
@@ -436,7 +434,7 @@ class GameScene extends Phaser.Scene {
             if (this.rubyEnergy <= 0) { this.flashBasket(basketRow, basketCol); return; }
             this.rubyEnergy--;
             this.saveRubyEnergy();
-            this.updateCell(basketRow, basketCol);
+            this.updateEnergyDisplay();
         }
 
         this.spawnCooldown = true;
@@ -704,6 +702,10 @@ class GameScene extends Phaser.Scene {
 
     // ── RUBY ENERGY ───────────────────────────────────────
 
+    updateEnergyDisplay() {
+        this.energyText.setText(`Energy: ${this.rubyEnergy} / ${this.RUBY_ENERGY_CAP}`);
+    }
+
     loadRubyEnergy() {
         const saved = parseInt(localStorage.getItem('rubyEnergy') || '0');
         const lastSeen = parseInt(localStorage.getItem('rubyLastSeen') || String(Date.now()));
@@ -723,10 +725,7 @@ class GameScene extends Phaser.Scene {
                 if (this.rubyEnergy < this.RUBY_ENERGY_CAP) {
                     this.rubyEnergy++;
                     this.saveRubyEnergy();
-                    for (let r = 0; r < this.ROWS; r++)
-                        for (let c = 0; c < this.COLS; c++)
-                            if (this.board[r][c].level === -1 && this.board[r][c].type === 3)
-                                this.updateCell(r, c);
+                    this.updateEnergyDisplay();
                 }
             },
             loop: true,
