@@ -24,7 +24,7 @@ A casual merge puzzle game built as a PWA for Svetlana's iPad. No App Store, ins
 - Sprite native size: **192×192px** (ELEM_SCALE = (CELL_SIZE - 12) / 192)
 
 ## Versioning
-Single source of truth: `version.js` → `const APP_VERSION = '0.0.3'`
+Single source of truth: `version.js` → `const APP_VERSION = '0.1.3'`
 Bump this on every release. The SW cache name is `merge-game-${APP_VERSION}`, so bumping forces a cache refresh on the player's device.
 
 ## Board data model
@@ -44,19 +44,21 @@ Future basket types: just push a new config entry.
 
 ## Key mechanics
 - **Tap basket** → spawns level-1 element in a random empty cell within the 3×3 neighborhood
-- **Hold basket 200ms → drag** → drop on empty cell to relocate basket
+- **Drag basket** → move >20px triggers basket relocation (movement-based, no timer)
 - **Drag element** → drop on same-level same-type element to merge into level+1; drop on empty cell to move
 - **Game over** when grid is full and no same-type same-level pair exists anywhere
 
-## Pending tasks (use Task tool to see current state)
-1. ~~Multiple baskets + long-press move~~ ✓
-2. Customer / order system — panel between score bar and grid; customers request specific type+level items
-3. Pixel art sprites — replace colored rectangles; each basket type has a themed sprite chain; target **192×192px PNG**
-4. Animation polish — particle burst on merge, arc travel when fulfilling orders
-5. Reduce basket long-press to 100ms
+## Order system
+- Panel between header and grid; up to 4 simultaneous orders
+- Orders spawn every 20s; if the board is empty → new order after 1s
+- Order type is uniformly random among unlocked basket types only
+- Fulfilling an order scores `level × 50`; expiry (45s) costs −50 points
 
-## Planned: Customer / order system (Task #2)
-A strip between the header and the game board. Customers appear with orders like "level 4 amber + level 5 purple". Player drags matching elements to fulfill. This is the core game loop. Design TBD.
+## Pending tasks
+1. ~~Multiple baskets + movement-based drag~~ ✓
+2. ~~Customer / order system~~ ✓
+3. Sprites — replace colored rectangles with themed PNG chains per basket type; **192×192px**, generated via AI API (Replicate / Recraft V3), downscaled with Lanczos + unsharp mask
+4. Animation polish — particle burst on merge, arc travel when fulfilling orders
 
 ## Workflow
 - Edit code → reload preview to verify → bump `version.js` → `git add . && git commit -m "vX.X.X: description" && git push`
