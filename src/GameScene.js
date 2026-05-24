@@ -16,20 +16,20 @@ class GameScene extends Phaser.Scene {
 
     create() {
         this.COLS = 7;
-        this.ROWS = 7;
+        this.ROWS = 9;
         this.GAP = 8;
         this.PANEL_H = 130;
         this.MAX_CUSTOMERS = 4;
 
         const cellW = Math.floor((680 - (this.COLS - 1) * this.GAP) / this.COLS);
-        const cellH = Math.floor((940 - (this.ROWS - 1) * this.GAP) / this.ROWS);
+        const cellH = Math.floor((1140 - (this.ROWS - 1) * this.GAP) / this.ROWS);
         this.CELL_SIZE = Math.min(cellW, cellH, 98);
-        this.ELEM_SCALE = (this.CELL_SIZE - 12) / 128;
+        this.ELEM_SCALE = (this.CELL_SIZE - 12) / 192;
 
         const gridW = this.COLS * this.CELL_SIZE + (this.COLS - 1) * this.GAP;
         const gridH = this.ROWS * this.CELL_SIZE + (this.ROWS - 1) * this.GAP;
         this.offsetX = (720 - gridW) / 2;
-        this.offsetY = 100 + this.PANEL_H + ((980 - this.PANEL_H) - gridH) / 2;
+        this.offsetY = 100 + this.PANEL_H + ((1180 - this.PANEL_H) - gridH) / 2;
 
         // Each basket type: color, label color, sprite key prefix for levels 1-8
         this.BASKET_CONFIGS = [
@@ -76,8 +76,7 @@ class GameScene extends Phaser.Scene {
         this.dragVisual = null;
         this.dragLabelVisual = null;
 
-        // Long-press state
-        this.longPressTimer = null;
+        // Basket interaction state (movement-based: move >20px = drag, release = spawn)
         this.longPressSrc = null;
         this.lastPointerPos = { x: 0, y: 0 };
 
@@ -104,7 +103,7 @@ class GameScene extends Phaser.Scene {
                 this.board[r][c] = { level: 0, type: null };
             }
         }
-        this.board[3][2] = { level: -1, type: 0 };
+        this.board[4][3] = { level: -1, type: 0 };
     }
 
     createUI() {
@@ -115,7 +114,7 @@ class GameScene extends Phaser.Scene {
         this.highScoreText = this.add.text(696, 28, `Best: ${this.highScore}`, {
             fontSize: '22px', fill: '#aaaaaa', fontFamily: 'Arial',
         }).setOrigin(1, 0);
-        this.add.text(720, 1076, `v${APP_VERSION}`, {
+        this.add.text(720, 1276, `v${APP_VERSION}`, {
             fontSize: '18px', fill: '#2a2a4a', fontFamily: 'Arial',
         }).setOrigin(1, 1);
     }
@@ -231,10 +230,6 @@ class GameScene extends Phaser.Scene {
 
         if (level === -1) {
             this.longPressSrc = { row, col };
-            this.longPressTimer = this.time.delayedCall(200, () => {
-                this.longPressTimer = null;
-                this.startDrag(row, col, this.lastPointerPos, true);
-            });
             return;
         }
 
@@ -246,12 +241,12 @@ class GameScene extends Phaser.Scene {
     onPointerMove(pointer) {
         this.lastPointerPos = { x: pointer.x, y: pointer.y };
 
-        if (this.longPressTimer && this.longPressSrc) {
+        if (this.longPressSrc && !this.dragSrc) {
             const { x: bx, y: by } = this.getCellPos(this.longPressSrc.row, this.longPressSrc.col);
-            if (Math.abs(pointer.x - bx) > 15 || Math.abs(pointer.y - by) > 15) {
-                this.longPressTimer.remove();
-                this.longPressTimer = null;
+            if (Math.abs(pointer.x - bx) > 20 || Math.abs(pointer.y - by) > 20) {
+                const { row, col } = this.longPressSrc;
                 this.longPressSrc = null;
+                this.startDrag(row, col, pointer, true);
             }
         }
 
@@ -261,15 +256,12 @@ class GameScene extends Phaser.Scene {
     }
 
     onPointerUp(pointer) {
-        if (this.longPressTimer) {
-            this.longPressTimer.remove();
-            this.longPressTimer = null;
+        if (this.longPressSrc) {
             const src = this.longPressSrc;
             this.longPressSrc = null;
-            if (src) this.spawnFromBasket(src.row, src.col);
+            this.spawnFromBasket(src.row, src.col);
             return;
         }
-        this.longPressSrc = null;
 
         if (!this.dragSrc) return;
         const cell = this.pointerToCell(pointer);
@@ -527,7 +519,8 @@ class GameScene extends Phaser.Scene {
         if (slot === -1) return;
         this.slotOccupied[slot] = true;
 
-        const type = this.basket2Unlocked ? Phaser.Math.Between(0, 1) : 0;
+        const unlockedCount = this.basket3Unlocked ? 3 : this.basket2Unlocked ? 2 : 1;
+        const type = Phaser.Math.Between(0, unlockedCount - 1);
         const level = Phaser.Math.Between(2, 4);
         const sx = this.getSlotX(slot);
         const py = 100 + this.PANEL_H / 2;
@@ -576,6 +569,9 @@ class GameScene extends Phaser.Scene {
         for (const obj of customer.objects) obj.destroy();
         this.slotOccupied[customer.slot] = false;
         this.customers.splice(idx, 1);
+        if (this.customers.length === 0) {
+            this.time.delayedCall(1000, () => this.spawnCustomer());
+        }
     }
 
     pointerToCustomerIndex(px, py) {

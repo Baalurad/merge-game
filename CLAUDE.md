@@ -13,6 +13,16 @@ A casual merge puzzle game built as a PWA for Svetlana's iPad. No App Store, ins
 - **Service Worker** (`sw.js`) — offline caching, keyed by `APP_VERSION`
 - **GitHub Pages** — free static hosting from `master` branch root
 
+## Target devices
+- **iPad 12.9" 2017** (primary): 1024×1366 CSS pt (2048×2732 physical, 2x retina)
+- **iPhone 17**: 402×874 CSS pt (1206×2622 physical, 3x)
+
+## Canvas & grid
+- Canvas: **720×1280** (Phaser Scale.FIT — scales to fill device)
+- Grid: **7 columns × 9 rows**, GAP=8px
+- Cell size: ~90px on canvas → ~96 CSS pt on iPad → ~192 physical px on iPad
+- Sprite native size: **192×192px** (ELEM_SCALE = (CELL_SIZE - 12) / 192)
+
 ## Versioning
 Single source of truth: `version.js` → `const APP_VERSION = '0.0.3'`
 Bump this on every release. The SW cache name is `merge-game-${APP_VERSION}`, so bumping forces a cache refresh on the player's device.
@@ -41,7 +51,7 @@ Future basket types: just push a new config entry.
 ## Pending tasks (use Task tool to see current state)
 1. ~~Multiple baskets + long-press move~~ ✓
 2. Customer / order system — panel between score bar and grid; customers request specific type+level items
-3. Pixel art sprites — replace colored rectangles; each basket type has a themed sprite chain (e.g. yellow=oranges, purple=berries); target 80×80px PNG
+3. Pixel art sprites — replace colored rectangles; each basket type has a themed sprite chain; target **192×192px PNG**
 4. Animation polish — particle burst on merge, arc travel when fulfilling orders
 5. Reduce basket long-press to 100ms
 

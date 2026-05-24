@@ -5,7 +5,7 @@ const config = {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: 720,
-        height: 1080,
+        height: 1280,
     },
     backgroundColor: '#1a1a2e',
     scene: [GameScene],
