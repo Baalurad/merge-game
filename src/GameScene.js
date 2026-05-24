@@ -79,6 +79,10 @@ class GameScene extends Phaser.Scene {
         this.score = 0;
         this.highScore = parseInt(localStorage.getItem('mergeHighScore') || '0');
 
+        this.RUBY_ENERGY_CAP = 60;
+        this.RUBY_ENERGY_REGEN_MS = 60000;
+        this.loadRubyEnergy();
+
         this.isAnimating = false;
         this.spawnCooldown = false;
 
@@ -92,7 +96,7 @@ class GameScene extends Phaser.Scene {
         this.dragLabelVisual = null;
 
         // Basket interaction state (movement-based: move >20px = drag, release = spawn)
-        this.longPressSrc = null;
+        this.basketPressSrc = null;
         this.lastPointerPos = { x: 0, y: 0 };
 
         // board[r][c] = { level, type }
@@ -109,6 +113,9 @@ class GameScene extends Phaser.Scene {
         this.input.on('pointermove', this.onPointerMove, this);
         this.input.on('pointerup', this.onPointerUp, this);
         this.startCustomerSpawner();
+        this.startEnergyRegen();
+        window.addEventListener('pagehide', () => this.saveRubyEnergy());
+        document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveRubyEnergy(); });
     }
 
     initBoard() {
@@ -206,7 +213,13 @@ class GameScene extends Phaser.Scene {
                     .setPosition(obj.baseX, obj.baseY).setScale(1).setVisible(true);
                 obj.elem.setVisible(false);
             }
-            obj.label.setText('').setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
+            if (type === 3) {
+                this.placeLevelLabel(obj.label, obj.baseX, obj.baseY, this.CELL_SIZE)
+                    .setStyle({ fontSize: '20px', fill: '#f1c40f', fontFamily: 'Arial', fontStyle: 'bold' })
+                    .setText(`${this.rubyEnergy}`).setScale(1).setAlpha(1);
+            } else {
+                obj.label.setText('').setPosition(obj.baseX, obj.baseY).setScale(1).setAlpha(1);
+            }
         } else if (level === 0) {
             obj.bg.setStrokeStyle(2, 0x0f3460);
             obj.basketRect.setFillStyle(0x0f3460).setAlpha(0.2)
@@ -245,7 +258,7 @@ class GameScene extends Phaser.Scene {
         const { level } = this.board[row][col];
 
         if (level === -1) {
-            this.longPressSrc = { row, col };
+            this.basketPressSrc = { row, col };
             return;
         }
 
@@ -257,11 +270,10 @@ class GameScene extends Phaser.Scene {
     onPointerMove(pointer) {
         this.lastPointerPos = { x: pointer.x, y: pointer.y };
 
-        if (this.longPressSrc && !this.dragSrc) {
-            const { x: bx, y: by } = this.getCellPos(this.longPressSrc.row, this.longPressSrc.col);
-            if (Math.abs(pointer.x - bx) > 20 || Math.abs(pointer.y - by) > 20) {
-                const { row, col } = this.longPressSrc;
-                this.longPressSrc = null;
+        if (this.basketPressSrc && !this.dragSrc) {
+            if (Math.abs(pointer.x - this.lastPointerPos.x) > 20 || Math.abs(pointer.y - this.lastPointerPos.y) > 20) {
+                const { row, col } = this.basketPressSrc;
+                this.basketPressSrc = null;
                 this.startDrag(row, col, pointer, true);
             }
         }
@@ -272,9 +284,9 @@ class GameScene extends Phaser.Scene {
     }
 
     onPointerUp(pointer) {
-        if (this.longPressSrc) {
-            const src = this.longPressSrc;
-            this.longPressSrc = null;
+        if (this.basketPressSrc) {
+            const src = this.basketPressSrc;
+            this.basketPressSrc = null;
             this.spawnFromBasket(src.row, src.col);
             return;
         }
@@ -294,8 +306,8 @@ class GameScene extends Phaser.Scene {
         const labelColor = isBasket ? cfg.labelColor : cfg.elemTextColor;
 
         if (isBasket) {
-            this.dragVisual = this.add.rectangle(pointer.x, pointer.y,
-                this.CELL_SIZE - 12, this.CELL_SIZE - 12, cfg.color)
+            this.dragVisual = this.add.image(pointer.x, pointer.y, cfg.basketSprite)
+                .setScale(this.ELEM_SCALE)
                 .setDepth(20).setAlpha(0.9);
         } else {
             this.dragVisual = this.add.image(pointer.x, pointer.y, `${cfg.spritePrefix}_${level}`)
@@ -418,10 +430,17 @@ class GameScene extends Phaser.Scene {
 
     spawnFromBasket(basketRow, basketCol) {
         if (this.spawnCooldown) return;
+        const { type } = this.board[basketRow][basketCol];
+
+        if (type === 3) {
+            if (this.rubyEnergy <= 0) { this.flashBasket(basketRow, basketCol); return; }
+            this.rubyEnergy--;
+            this.saveRubyEnergy();
+            this.updateCell(basketRow, basketCol);
+        }
+
         this.spawnCooldown = true;
         this.time.delayedCall(300, () => { this.spawnCooldown = false; });
-
-        const { type } = this.board[basketRow][basketCol];
         const candidates = [];
         for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
@@ -533,10 +552,14 @@ class GameScene extends Phaser.Scene {
     spawnCustomer() {
         const slot = this.slotOccupied.indexOf(false);
         if (slot === -1) return;
-        this.slotOccupied[slot] = true;
 
-        const unlockedCount = this.basket3Unlocked ? 3 : this.basket2Unlocked ? 2 : 1;
-        const type = Phaser.Math.Between(0, unlockedCount - 1);
+        const types = new Set();
+        for (let r = 0; r < this.ROWS; r++)
+            for (let c = 0; c < this.COLS; c++)
+                if (this.board[r][c].level === -1) types.add(this.board[r][c].type);
+        if (types.size === 0) return;
+        this.slotOccupied[slot] = true;
+        const type = Phaser.Utils.Array.GetRandom([...types]);
         const level = Phaser.Math.Between(2, 4);
         const sx = this.getSlotX(slot);
         const py = 100 + this.PANEL_H / 2;
@@ -676,6 +699,37 @@ class GameScene extends Phaser.Scene {
                 this.updateGrid();
                 this.isAnimating = false;
             },
+        });
+    }
+
+    // ── RUBY ENERGY ───────────────────────────────────────
+
+    loadRubyEnergy() {
+        const saved = parseInt(localStorage.getItem('rubyEnergy') || '0');
+        const lastSeen = parseInt(localStorage.getItem('rubyLastSeen') || String(Date.now()));
+        const earned = Math.floor((Date.now() - lastSeen) / this.RUBY_ENERGY_REGEN_MS);
+        this.rubyEnergy = Math.min(this.RUBY_ENERGY_CAP, saved + earned);
+    }
+
+    saveRubyEnergy() {
+        localStorage.setItem('rubyEnergy', String(this.rubyEnergy));
+        localStorage.setItem('rubyLastSeen', String(Date.now()));
+    }
+
+    startEnergyRegen() {
+        this.time.addEvent({
+            delay: this.RUBY_ENERGY_REGEN_MS,
+            callback: () => {
+                if (this.rubyEnergy < this.RUBY_ENERGY_CAP) {
+                    this.rubyEnergy++;
+                    this.saveRubyEnergy();
+                    for (let r = 0; r < this.ROWS; r++)
+                        for (let c = 0; c < this.COLS; c++)
+                            if (this.board[r][c].level === -1 && this.board[r][c].type === 3)
+                                this.updateCell(r, c);
+                }
+            },
+            loop: true,
         });
     }
 }

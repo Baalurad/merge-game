@@ -20,7 +20,6 @@ A casual merge puzzle game built as a PWA for Svetlana's iPad. No App Store, ins
 ## Canvas & grid
 - Canvas: **720×1280** (Phaser Scale.FIT — scales to fill device)
 - Grid: **7 columns × 9 rows**, GAP=8px
-- Cell size: ~90px on canvas → ~96 CSS pt on iPad → ~192 physical px on iPad
 - Sprite native size: **192×192px** (ELEM_SCALE = (CELL_SIZE - 12) / 192)
 
 ## Versioning
@@ -31,28 +30,37 @@ Bump this on every release. The SW cache name is `merge-game-${APP_VERSION}`, so
 `board[row][col]` is an object `{ level, type }`:
 - `level: -1, type: N` — basket of type N
 - `level: 0, type: null` — empty cell
-- `level: 1–8, type: N` — element produced by basket type N
+- `level: 1–maxLevel, type: N` — element produced by basket type N (maxLevel per type, up to 10)
 
 Elements can only merge if **same level AND same type**.
 
 ## Basket configs (`BASKET_CONFIGS` array in GameScene.js)
-Each entry: `{ color, labelColor, elemColors[1..8] }`
-- Index 0: amber/warm palette (yellows, reds, oranges)
-- Index 1: purple/cool palette (blues, teals, purples)
+Each entry: `{ color, labelColor, elemTextColor, spritePrefix, basketSprite, maxLevel }`
+- Index 0: egg / henhouse_basket — amber, maxLevel 8
+- Index 1: coffee / plantation_basket — purple, maxLevel 8
+- Index 2: potion / cauldron_basket — green, maxLevel 8
+- Index 3: ruby / ruby_basket — red, maxLevel 10
 
-Future basket types: just push a new config entry.
+Future basket types: push a new config entry and add corresponding sprites.
 
 ## Key mechanics
 - **Tap basket** → spawns level-1 element in a random empty cell within the 3×3 neighborhood
-- **Drag basket** → move >20px triggers basket relocation (movement-based, no timer)
+- **Drag basket** → move >20px from finger-down position triggers basket relocation; release without drag = spawn
 - **Drag element** → drop on same-level same-type element to merge into level+1; drop on empty cell to move
 - **Game over** when grid is full and no same-type same-level pair exists anywhere
 
 ## Order system
 - Panel between header and grid; up to 4 simultaneous orders
 - Orders spawn every 20s; if the board is empty → new order after 1s
-- Order type is uniformly random among unlocked basket types only
+- Order type is uniformly random among basket types **currently on the board** (dynamic, not hardcoded)
 - Fulfilling an order scores `level × 50`; expiry (45s) costs −50 points
+
+## Energy system (ruby only)
+- Ruby basket (type 3) uses energy to spawn: each tap costs 1 energy
+- Cap: 60, regen: 1 per minute (60 000 ms)
+- Offline regen: on load, compute elapsed since `rubyLastSeen` and grant earned energy up to cap
+- Persistence: `rubyEnergy` + `rubyLastSeen` in localStorage; saved on `pagehide` and `visibilitychange`
+- Current energy shown as gold number in bottom-left corner of the ruby basket cell
 
 ## Pending tasks
 1. ~~Multiple baskets + movement-based drag~~ ✓
