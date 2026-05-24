@@ -707,7 +707,7 @@ class GameScene extends Phaser.Scene {
     }
 
     loadRubyEnergy() {
-        const saved = parseInt(localStorage.getItem('rubyEnergy') || '0');
+        const saved = parseInt(localStorage.getItem('rubyEnergy') ?? '30');
         const lastSeen = parseInt(localStorage.getItem('rubyLastSeen') || String(Date.now()));
         const earned = Math.floor((Date.now() - lastSeen) / this.RUBY_ENERGY_REGEN_MS);
         this.rubyEnergy = Math.min(this.RUBY_ENERGY_CAP, saved + earned);
