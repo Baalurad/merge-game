@@ -1,0 +1,10 @@
+{
+  "name": "merge-game-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "replicate": "^1.0.1",
+    "sharp": "^0.33.5"
+  }
+}

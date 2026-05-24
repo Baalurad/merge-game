@@ -9,6 +9,10 @@ class GameScene extends Phaser.Scene {
             this.load.image(`coffee_${i}`, `assets/coffee/coffee_${i}.png`);
             this.load.image(`potion_${i}`, `assets/potions/potion_${i}.png`);
         }
+        for (let i = 1; i <= 10; i++) {
+            this.load.image(`ruby_${i}`, `assets/ruby-cartoon/ruby_${i}.png`);
+        }
+        this.load.image('ruby_basket', 'assets/ruby-cartoon/ruby_basket.png');
         this.load.image('henhouse_basket', 'assets/eggs/henhouse_basket.png');
         this.load.image('plantation_basket', 'assets/coffee/plantation_basket.png');
         this.load.image('cauldron_basket', 'assets/potions/cauldron_basket.png');
@@ -39,6 +43,7 @@ class GameScene extends Phaser.Scene {
                 elemTextColor: '#ffffff',
                 spritePrefix: 'egg',
                 basketSprite: 'henhouse_basket',
+                maxLevel: 8,
             },
             {
                 color: 0x8e44ad,
@@ -46,6 +51,7 @@ class GameScene extends Phaser.Scene {
                 elemTextColor: '#000000',
                 spritePrefix: 'coffee',
                 basketSprite: 'plantation_basket',
+                maxLevel: 8,
             },
             {
                 color: 0x27ae60,
@@ -53,10 +59,19 @@ class GameScene extends Phaser.Scene {
                 elemTextColor: '#ffffff',
                 spritePrefix: 'potion',
                 basketSprite: 'cauldron_basket',
+                maxLevel: 8,
+            },
+            {
+                color: 0xc0392b,
+                labelColor: '#ffffff',
+                elemTextColor: '#ffffff',
+                spritePrefix: 'ruby',
+                basketSprite: 'ruby_basket',
+                maxLevel: 10,
             },
         ];
 
-        this.LABELS = ['', '1', '2', '3', '4', '5', '6', '7', '★'];
+        this.LABELS = ['', '1', '2', '3', '4', '5', '6', '7', '8', '9', '★'];
 
         this.customers = [];
         this.slotOccupied = new Array(this.MAX_CUSTOMERS).fill(false);
@@ -104,6 +119,7 @@ class GameScene extends Phaser.Scene {
             }
         }
         this.board[4][3] = { level: -1, type: 0 };
+        this.board[4][4] = { level: -1, type: 3 };
     }
 
     createUI() {
@@ -358,7 +374,7 @@ class GameScene extends Phaser.Scene {
         }
 
         this.isAnimating = true;
-        const newLevel = Math.min(srcCell.level + 1, 8);
+        const newLevel = Math.min(srcCell.level + 1, this.BASKET_CONFIGS[srcCell.type].maxLevel);
         const { x: tx, y: ty } = this.getCellPos(tgtRow, tgtCol);
         const srcObj = this.cellObjects[srcRow][srcCol];
 
