@@ -7,9 +7,11 @@ class GameScene extends Phaser.Scene {
         for (let i = 1; i <= 8; i++) {
             this.load.image(`egg_${i}`, `assets/eggs/egg_${i}.png`);
             this.load.image(`coffee_${i}`, `assets/coffee/coffee_${i}.png`);
+            this.load.image(`potion_${i}`, `assets/potions/potion_${i}.png`);
         }
         this.load.image('henhouse_basket', 'assets/eggs/henhouse_basket.png');
         this.load.image('plantation_basket', 'assets/coffee/plantation_basket.png');
+        this.load.image('cauldron_basket', 'assets/potions/cauldron_basket.png');
     }
 
     create() {
@@ -45,6 +47,13 @@ class GameScene extends Phaser.Scene {
                 spritePrefix: 'coffee',
                 basketSprite: 'plantation_basket',
             },
+            {
+                color: 0x27ae60,
+                labelColor: '#ffffff',
+                elemTextColor: '#ffffff',
+                spritePrefix: 'potion',
+                basketSprite: 'cauldron_basket',
+            },
         ];
 
         this.LABELS = ['', '1', '2', '3', '4', '5', '6', '7', '★'];
@@ -57,6 +66,10 @@ class GameScene extends Phaser.Scene {
 
         this.isAnimating = false;
         this.spawnCooldown = false;
+
+        this.basket2Unlocked = false;
+        this.basket3Unlocked = false;
+        this.tasksCompleted = 0;
 
         // Drag state (shared between elements and baskets)
         this.dragSrc = null;      // { row, col, isBasket }
@@ -92,7 +105,6 @@ class GameScene extends Phaser.Scene {
             }
         }
         this.board[3][2] = { level: -1, type: 0 };
-        this.board[3][4] = { level: -1, type: 1 };
     }
 
     createUI() {
@@ -342,8 +354,18 @@ class GameScene extends Phaser.Scene {
     }
 
     performMerge(srcRow, srcCol, tgtRow, tgtCol) {
-        this.isAnimating = true;
         const srcCell = this.board[srcRow][srcCol];
+
+        if (!this.basket2Unlocked && srcCell.type === 1 && srcCell.level === 1) {
+            this.unlockBasket2(srcRow, srcCol, tgtRow, tgtCol);
+            return;
+        }
+        if (!this.basket3Unlocked && srcCell.type === 2 && srcCell.level === 2) {
+            this.unlockBasket3(srcRow, srcCol, tgtRow, tgtCol);
+            return;
+        }
+
+        this.isAnimating = true;
         const newLevel = Math.min(srcCell.level + 1, 8);
         const { x: tx, y: ty } = this.getCellPos(tgtRow, tgtCol);
         const srcObj = this.cellObjects[srcRow][srcCol];
@@ -505,8 +527,8 @@ class GameScene extends Phaser.Scene {
         if (slot === -1) return;
         this.slotOccupied[slot] = true;
 
-        const type = Phaser.Math.Between(0, this.BASKET_CONFIGS.length - 1);
-        const level = Phaser.Math.Between(3, 5);
+        const type = this.basket2Unlocked ? Phaser.Math.Between(0, 1) : 0;
+        const level = Phaser.Math.Between(2, 4);
         const sx = this.getSlotX(slot);
         const py = 100 + this.PANEL_H / 2;
         const cfg = this.BASKET_CONFIGS[type];
@@ -577,5 +599,71 @@ class GameScene extends Phaser.Scene {
         this.board[srcRow][srcCol] = { level: 0, type: null };
         this.updateCell(srcRow, srcCol);
         this.removeCustomer(customerIndex);
+
+        if (!this.basket2Unlocked) {
+            this.tasksCompleted++;
+            if (this.tasksCompleted <= 2) {
+                this.time.delayedCall(300, () => this.dropItem(1, 1));
+            }
+        } else if (!this.basket3Unlocked && cust.type === 1) {
+            this.time.delayedCall(300, () => this.dropItem(2, 1));
+        }
+    }
+
+    dropItem(type, level) {
+        const free = [];
+        for (let r = 0; r < this.ROWS; r++) {
+            for (let c = 0; c < this.COLS; c++) {
+                if (this.board[r][c].level === 0) free.push([r, c]);
+            }
+        }
+        if (free.length === 0) return;
+        const [r, c] = Phaser.Utils.Array.GetRandom(free);
+        this.board[r][c] = { level, type };
+        this.updateCell(r, c);
+
+        const obj = this.cellObjects[r][c];
+        obj.elem.setScale(0);
+        obj.label.setScale(0);
+        this.tweens.add({ targets: obj.elem, scaleX: this.ELEM_SCALE, scaleY: this.ELEM_SCALE, duration: 200, ease: 'Back.Out' });
+        this.tweens.add({ targets: obj.label, scaleX: 1, scaleY: 1, duration: 200, ease: 'Back.Out' });
+    }
+
+    unlockBasket2(srcRow, srcCol, tgtRow, tgtCol) {
+        this.isAnimating = true;
+        const { x: tx, y: ty } = this.getCellPos(tgtRow, tgtCol);
+        const srcObj = this.cellObjects[srcRow][srcCol];
+
+        this.tweens.add({
+            targets: [srcObj.elem, srcObj.label],
+            x: tx, y: ty, scaleX: 0, scaleY: 0,
+            duration: 160, ease: 'Power2',
+            onComplete: () => {
+                this.board[srcRow][srcCol] = { level: 0, type: null };
+                this.board[tgtRow][tgtCol] = { level: -1, type: 1 };
+                this.basket2Unlocked = true;
+                this.updateGrid();
+                this.isAnimating = false;
+            },
+        });
+    }
+
+    unlockBasket3(srcRow, srcCol, tgtRow, tgtCol) {
+        this.isAnimating = true;
+        const { x: tx, y: ty } = this.getCellPos(tgtRow, tgtCol);
+        const srcObj = this.cellObjects[srcRow][srcCol];
+
+        this.tweens.add({
+            targets: [srcObj.elem, srcObj.label],
+            x: tx, y: ty, scaleX: 0, scaleY: 0,
+            duration: 160, ease: 'Power2',
+            onComplete: () => {
+                this.board[srcRow][srcCol] = { level: 0, type: null };
+                this.board[tgtRow][tgtCol] = { level: -1, type: 2 };
+                this.basket3Unlocked = true;
+                this.updateGrid();
+                this.isAnimating = false;
+            },
+        });
     }
 }
