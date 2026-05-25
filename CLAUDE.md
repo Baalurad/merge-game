@@ -62,11 +62,26 @@ Future basket types: push a new config entry and add corresponding sprites.
 - Persistence: `rubyEnergy` + `rubyLastSeen` in localStorage; saved on `pagehide` and `visibilitychange`
 - Current energy shown as gold number in bottom-left corner of the ruby basket cell
 
+## Ideas & Design
+
+All concept files live in [`ideas/`](ideas/):
+
+| Файл | Статус | Описание |
+|---|---|---|
+| [`ideas/chain-ruby.md`](ideas/chain-ruby.md) | ✅ Готово | Рубиновая цепочка, 10 уровней, спрайты в `assets/ruby-cartoon/` |
+| [`ideas/chain-drops.md`](ideas/chain-drops.md) | 🔲 Концепт | Капли → кристалл (сапфир/изумруд), идея жены |
+| [`ideas/chain-squares.md`](ideas/chain-squares.md) | 🔲 Концепт | Квадраты → корона (изумруд/аметист), идея жены |
+| [`ideas/feature-customer-panel.md`](ideas/feature-customer-panel.md) | 🔧 В работе | Свайп-панель, мульти-товар, спрайты заказчиков, анимации |
+
+Sprite generation pipeline: [`scripts/gen-sprites.js`](scripts/gen-sprites.js)  
+Ruby prompts & evaluations: [`scripts/ruby-chain-prompts.md`](scripts/ruby-chain-prompts.md)
+
 ## Pending tasks
 1. ~~Multiple baskets + movement-based drag~~ ✓
 2. ~~Customer / order system~~ ✓
 3. Sprites — replace colored rectangles with themed PNG chains per basket type; **192×192px**, generated via AI API (Replicate / Recraft V3), downscaled with Lanczos + unsharp mask
 4. Animation polish — particle burst on merge, arc travel when fulfilling orders
+5. Customer panel v2 — multi-item orders, horizontal swipe, customer sprites (see [`ideas/feature-customer-panel.md`](ideas/feature-customer-panel.md))
 
 ## Workflow
 - Edit code → reload preview to verify → bump `version.js` → `git add . && git commit -m "vX.X.X: description" && git push`

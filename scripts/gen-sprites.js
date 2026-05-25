@@ -7,6 +7,8 @@
  *   node scripts/gen-sprites.js --style vector         — all 10, style 2
  *   node scripts/gen-sprites.js --level 3              — only level 3
  *   node scripts/gen-sprites.js --fix-bg               — remove white bg from existing (no API calls)
+ *   node scripts/gen-sprites.js --outline              — add programmatic outline to existing sprites
+ *   node scripts/gen-sprites.js --outline --outline-px 3  — same, 3px thickness (default: 2)
  */
 
 const Replicate = require('replicate');
@@ -17,6 +19,36 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+
+const OUTLINE_PX = 2;
+
+// Dilation-based outline: fills transparent pixels within outlinePx of any opaque pixel with black.
+// Mutates data in place. Works on already-transparent sprites (no bg needed).
+function applyOutlineToData(data, width, height, channels, outlinePx) {
+  const total = width * height;
+  const outlineMask = new Uint8Array(total);
+  for (let oy = 0; oy < height; oy++) {
+    for (let ox = 0; ox < width; ox++) {
+      const oi = oy * width + ox;
+      if (data[oi * channels + 3] > 128) continue;
+      let nearOpaque = false;
+      outer: for (let dy = -outlinePx; dy <= outlinePx; dy++) {
+        for (let dx = -outlinePx; dx <= outlinePx; dx++) {
+          if (dx * dx + dy * dy > outlinePx * outlinePx) continue;
+          const nx = ox + dx, ny = oy + dy;
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+          if (data[(ny * width + nx) * channels + 3] > 128) { nearOpaque = true; break outer; }
+        }
+      }
+      if (nearOpaque) outlineMask[oi] = 1;
+    }
+  }
+  for (let i = 0; i < total; i++) {
+    if (!outlineMask[i]) continue;
+    const idx = i * channels;
+    data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 255;
+  }
+}
 
 // ---------- Styles ----------
 const STYLES = {
@@ -247,9 +279,29 @@ async function removeWhiteBackground(inputBuf) {
     }
   }
 
+  // Pass 5: programmatic black outline
+  applyOutlineToData(data, width, height, channels, OUTLINE_PX);
+
   return sharp(Buffer.from(data), { raw: { width, height, channels } })
     .png()
     .toBuffer();
+}
+
+// ---------- Outline-only on existing folder ----------
+async function addOutlineOnly(dir, outlinePx) {
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.png'));
+  console.log(`Adding ${outlinePx}px outline to ${files.length} files in ${dir}`);
+  for (const file of files) {
+    const filePath = path.join(dir, file);
+    const buf = fs.readFileSync(filePath);
+    const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const { width, height, channels } = info;
+    applyOutlineToData(data, width, height, channels, outlinePx);
+    const out = await sharp(Buffer.from(data), { raw: { width, height, channels } }).png().toBuffer();
+    fs.writeFileSync(filePath, out);
+    console.log(`  outlined: ${file}`);
+  }
+  console.log('Done!');
 }
 
 // ---------- Replicate with retry ----------
@@ -344,6 +396,16 @@ async function main() {
   if (args.includes('--fix-bg')) {
     const dir = path.join(__dirname, '../assets/ruby-cartoon');
     await fixBgOnly(dir);
+    return;
+  }
+
+  // --outline: add programmatic outline to existing sprites (no bg removal, no API calls)
+  if (args.includes('--outline')) {
+    const outlinePx = args.includes('--outline-px')
+      ? parseInt(args[args.indexOf('--outline-px') + 1])
+      : OUTLINE_PX;
+    const dir = path.join(__dirname, '../assets/ruby-cartoon');
+    await addOutlineOnly(dir, outlinePx);
     return;
   }
 

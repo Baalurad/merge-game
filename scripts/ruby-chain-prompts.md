@@ -4,7 +4,8 @@
 - Model: `recraft-ai/recraft-v3` via Replicate
 - Style: `digital_illustration`
 - Resolution: 1024×1024 → downscale 192×192 (Lanczos3)
-- Post-processing: 3-pass white background removal (flood-fill + enclosed regions + fringe feather)
+- Post-processing: 5-pass pipeline (flood-fill bg removal + enclosed regions + fringe feather + shadow removal + programmatic outline)
+- Outline: 1px programmatic (dilation от альфа-маски) — протестировано на рубинах, результат ок. Бэкап до обводки: `assets/ruby-cartoon-backup/`
 
 ## Style anchor (добавляется к каждому промпту)
 ```
