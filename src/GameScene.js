@@ -4,19 +4,19 @@ class GameScene extends Phaser.Scene {
     }
 
     preload() {
-        for (let i = 1; i <= 8; i++) {
+        for (let i = 1; i <= 10; i++) {
             this.load.image(`egg_${i}`, `assets/eggs/egg_${i}.png`);
             this.load.image(`coffee_${i}`, `assets/coffee/coffee_${i}.png`);
-            this.load.image(`potion_${i}`, `assets/potions/potion_${i}.png`);
-        }
-        for (let i = 1; i <= 10; i++) {
             this.load.image(`ruby_${i}`, `assets/ruby-cartoon/ruby_${i}.png`);
             this.load.image(`crystal_${i}`, `assets/crystal-cartoon/crystal_${i}.png`);
+        }
+        for (let i = 1; i <= 8; i++) {
+            this.load.image(`potion_${i}`, `assets/potions/potion_${i}.png`);
         }
         this.load.image('ruby_basket', 'assets/ruby-cartoon/ruby_basket.png');
         this.load.image('crystal_basket', 'assets/crystal-cartoon/crystal_basket.png');
         this.load.image('henhouse_basket', 'assets/eggs/henhouse_basket.png');
-        this.load.image('plantation_basket', 'assets/coffee/plantation_basket.png');
+        this.load.image('coffee_basket', 'assets/coffee/basket_sack.png');
         this.load.image('cauldron_basket', 'assets/potions/cauldron_basket.png');
     }
 
@@ -37,7 +37,6 @@ class GameScene extends Phaser.Scene {
         this.offsetX = (720 - gridW) / 2;
         this.offsetY = 100 + this.PANEL_H + ((1180 - this.PANEL_H) - gridH) / 2;
 
-        // Each basket type: color, label color, sprite key prefix for levels 1-8
         this.BASKET_CONFIGS = [
             {
                 color: 0xf39c12,
@@ -45,15 +44,15 @@ class GameScene extends Phaser.Scene {
                 elemTextColor: '#ffffff',
                 spritePrefix: 'egg',
                 basketSprite: 'henhouse_basket',
-                maxLevel: 8,
+                maxLevel: 10,
             },
             {
                 color: 0x8e44ad,
                 labelColor: '#ffffff',
                 elemTextColor: '#000000',
                 spritePrefix: 'coffee',
-                basketSprite: 'plantation_basket',
-                maxLevel: 8,
+                basketSprite: 'coffee_basket',
+                maxLevel: 10,
             },
             {
                 color: 0x27ae60,
