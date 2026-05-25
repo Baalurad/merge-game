@@ -68,6 +68,7 @@ class GameScene extends Phaser.Scene {
                 spritePrefix: 'ruby',
                 basketSprite: 'ruby_basket',
                 maxLevel: 10,
+                energyBased: true,
             },
         ];
 
@@ -140,6 +141,10 @@ class GameScene extends Phaser.Scene {
         this.energyText = this.add.text(360, 64, '', {
             fontSize: '20px', fill: '#f1c40f', fontFamily: 'Arial', fontStyle: 'bold',
         }).setOrigin(0.5, 0);
+        this.energyPlusBtn = this.add.text(0, 72, '+', {
+            fontSize: '24px', fill: '#e74c3c', fontFamily: 'Arial', fontStyle: 'bold',
+        }).setOrigin(0, 0.5).setInteractive()
+            .on('pointerdown', () => this.showEnergyPopup());
         this.updateEnergyDisplay();
         this.add.text(720, 1276, `v${APP_VERSION}`, {
             fontSize: '18px', fill: '#2a2a4a', fontFamily: 'Arial',
@@ -430,7 +435,7 @@ class GameScene extends Phaser.Scene {
         if (this.spawnCooldown) return;
         const { type } = this.board[basketRow][basketCol];
 
-        if (type === 3) {
+        if (this.BASKET_CONFIGS[type].energyBased) {
             if (this.rubyEnergy <= 0) { this.flashBasket(basketRow, basketCol); return; }
             this.rubyEnergy--;
             this.saveRubyEnergy();
@@ -556,6 +561,13 @@ class GameScene extends Phaser.Scene {
             for (let c = 0; c < this.COLS; c++)
                 if (this.board[r][c].level === -1) types.add(this.board[r][c].type);
         if (types.size === 0) return;
+
+        // Max 1 order per energy-based type — exclude types that already have an active order
+        for (const c of this.customers) {
+            if (this.BASKET_CONFIGS[c.type].energyBased) types.delete(c.type);
+        }
+        if (types.size === 0) return;
+
         this.slotOccupied[slot] = true;
         const type = Phaser.Utils.Array.GetRandom([...types]);
         const level = Phaser.Math.Between(2, 4);
@@ -563,6 +575,7 @@ class GameScene extends Phaser.Scene {
         const py = 100 + this.PANEL_H / 2;
         const cfg = this.BASKET_CONFIGS[type];
         const EXPIRY = 45000;
+        const isEnergyBased = !!cfg.energyBased;
 
         const cardBg = this.add.rectangle(sx, py, 148, 110, 0x1a2e4a)
             .setStrokeStyle(2, cfg.color).setDepth(2);
@@ -579,23 +592,28 @@ class GameScene extends Phaser.Scene {
         const customer = { type, level, slot, objects: [cardBg, elemImg, levelLabel, timerBarBg, timerBarFill] };
         this.customers.push(customer);
 
-        customer.timerTween = this.tweens.add({
-            targets: timerBarFill, scaleX: 0, duration: EXPIRY, ease: 'Linear',
-        });
-        customer.expiryTimer = this.time.addEvent({
-            delay: EXPIRY,
-            callback: () => {
-                const idx = this.customers.indexOf(customer);
-                if (idx >= 0) {
-                    this.score -= 50;
-                    this.scoreText.setText(`Score: ${this.score}`);
-                    this.removeCustomer(idx);
-                    if (this.score < 0) {
-                        this.time.delayedCall(200, () => this.showGameOver());
+        if (isEnergyBased) {
+            timerBarBg.setVisible(false);
+            timerBarFill.setVisible(false);
+        } else {
+            customer.timerTween = this.tweens.add({
+                targets: timerBarFill, scaleX: 0, duration: EXPIRY, ease: 'Linear',
+            });
+            customer.expiryTimer = this.time.addEvent({
+                delay: EXPIRY,
+                callback: () => {
+                    const idx = this.customers.indexOf(customer);
+                    if (idx >= 0) {
+                        this.score -= 50;
+                        this.scoreText.setText(`Score: ${this.score}`);
+                        this.removeCustomer(idx);
+                        if (this.score < 0) {
+                            this.time.delayedCall(200, () => this.showGameOver());
+                        }
                     }
-                }
-            },
-        });
+                },
+            });
+        }
     }
 
     removeCustomer(idx) {
@@ -700,10 +718,98 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    // ── ENERGY POPUP ──────────────────────────────────────
+
+    showEnergyPopup() {
+        const cx = 360, cy = 560;
+        const popupObjs = [];
+        const track = obj => { popupObjs.push(obj); return obj; };
+
+        const closePopup = () => { for (const o of popupObjs) o.destroy(); };
+
+        track(this.add.rectangle(360, 640, 720, 1280, 0x000000, 0.65).setDepth(30).setInteractive());
+
+        const card = track(this.add.rectangle(cx, cy, 520, 460, 0x1a2e4a)
+            .setStrokeStyle(2, 0xc0392b).setDepth(31).setInteractive());
+        card.on('pointerdown', (p, lx, ly, evt) => evt.stopPropagation());
+
+        track(this.add.text(cx, cy - 190, 'Нужно больше энергии?', {
+            fontSize: '22px', fill: '#f1c40f', fontFamily: 'Arial', fontStyle: 'bold',
+        }).setOrigin(0.5).setDepth(32));
+        track(this.add.text(cx, cy - 155, 'Спроси создателя!', {
+            fontSize: '20px', fill: '#ffffff', fontFamily: 'Arial',
+        }).setOrigin(0.5).setDepth(32));
+
+        // 4 digit boxes
+        let entered = '';
+        const digitTexts = [];
+        const digitRects = [];
+        for (let i = 0; i < 4; i++) {
+            const dx = cx - 105 + i * 70;
+            const dy = cy - 88;
+            digitRects.push(track(this.add.rectangle(dx, dy, 54, 64, 0x0d1926)
+                .setStrokeStyle(2, 0x3a5a8a).setDepth(32)));
+            digitTexts.push(track(this.add.text(dx, dy, '_', {
+                fontSize: '30px', fill: '#ffffff', fontFamily: 'Arial', fontStyle: 'bold',
+            }).setOrigin(0.5).setDepth(33)));
+        }
+
+        const updateDisplay = () => {
+            for (let i = 0; i < 4; i++) digitTexts[i].setText(i < entered.length ? entered[i] : '_');
+        };
+
+        const pin = APP_VERSION.replace(/\./g, '').padStart(4, '0');
+
+        const tryConfirm = () => {
+            if (entered === pin) {
+                this.rubyEnergy = Math.min(this.RUBY_ENERGY_CAP, this.rubyEnergy + 30);
+                this.saveRubyEnergy();
+                this.updateEnergyDisplay();
+                closePopup();
+            } else {
+                entered = '';
+                updateDisplay();
+                this.tweens.add({
+                    targets: [...digitRects, ...digitTexts],
+                    x: '+=8', duration: 45, yoyo: true, repeat: 3, ease: 'Linear',
+                });
+            }
+        };
+
+        // Numpad
+        const labels = ['1','2','3','4','5','6','7','8','9','⌫','0','✓'];
+        labels.forEach((label, idx) => {
+            const col = idx % 3, row = Math.floor(idx / 3);
+            const bx = cx - 110 + col * 110;
+            const by = cy - 10 + row * 72;
+            const btn = track(this.add.rectangle(bx, by, 96, 60, 0x0f3460)
+                .setStrokeStyle(1, 0x1a5080).setDepth(32).setInteractive());
+            track(this.add.text(bx, by, label, {
+                fontSize: '26px', fill: '#ffffff', fontFamily: 'Arial', fontStyle: 'bold',
+            }).setOrigin(0.5).setDepth(33));
+            btn.on('pointerover', () => btn.setFillStyle(0x1a4080));
+            btn.on('pointerout', () => btn.setFillStyle(0x0f3460));
+            btn.on('pointerdown', () => {
+                if (label === '⌫') { entered = entered.slice(0, -1); updateDisplay(); }
+                else if (label === '✓') { if (entered.length === 4) tryConfirm(); }
+                else if (entered.length < 4) { entered += label; updateDisplay(); if (entered.length === 4) tryConfirm(); }
+            });
+        });
+
+        // Close button
+        track(this.add.text(cx + 235, cy - 210, '✕', {
+            fontSize: '26px', fill: '#888888', fontFamily: 'Arial',
+        }).setOrigin(0.5).setDepth(33).setInteractive())
+            .on('pointerdown', closePopup);
+    }
+
     // ── RUBY ENERGY ───────────────────────────────────────
 
     updateEnergyDisplay() {
         this.energyText.setText(`Energy: ${this.rubyEnergy} / ${this.RUBY_ENERGY_CAP}`);
+        if (this.energyPlusBtn) {
+            this.energyPlusBtn.setX(360 + this.energyText.width / 2 + 6);
+        }
     }
 
     loadRubyEnergy() {
