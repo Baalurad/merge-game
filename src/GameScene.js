@@ -11,8 +11,10 @@ class GameScene extends Phaser.Scene {
         }
         for (let i = 1; i <= 10; i++) {
             this.load.image(`ruby_${i}`, `assets/ruby-cartoon/ruby_${i}.png`);
+            this.load.image(`crystal_${i}`, `assets/crystal-cartoon/crystal_${i}.png`);
         }
         this.load.image('ruby_basket', 'assets/ruby-cartoon/ruby_basket.png');
+        this.load.image('crystal_basket', 'assets/crystal-cartoon/crystal_basket.png');
         this.load.image('henhouse_basket', 'assets/eggs/henhouse_basket.png');
         this.load.image('plantation_basket', 'assets/coffee/plantation_basket.png');
         this.load.image('cauldron_basket', 'assets/potions/cauldron_basket.png');
@@ -70,6 +72,14 @@ class GameScene extends Phaser.Scene {
                 maxLevel: 10,
                 energyBased: true,
             },
+            {
+                color: 0x1a6fa8,
+                labelColor: '#ffffff',
+                elemTextColor: '#ffffff',
+                spritePrefix: 'crystal',
+                basketSprite: 'crystal_basket',
+                maxLevel: 10,
+            },
         ];
 
         this.LABELS = ['', '1', '2', '3', '4', '5', '6', '7', '8', '9', '★'];
@@ -89,6 +99,7 @@ class GameScene extends Phaser.Scene {
 
         this.basket2Unlocked = false;
         this.basket3Unlocked = false;
+        this.basket4Unlocked = false;
         this.tasksCompleted = 0;
 
         // Drag state (shared between elements and baskets)
@@ -387,6 +398,10 @@ class GameScene extends Phaser.Scene {
             this.unlockBasket3(srcRow, srcCol, tgtRow, tgtCol);
             return;
         }
+        if (!this.basket4Unlocked && srcCell.type === 4 && srcCell.level === 1) {
+            this.unlockBasket4(srcRow, srcCol, tgtRow, tgtCol);
+            return;
+        }
 
         this.isAnimating = true;
         const newLevel = Math.min(srcCell.level + 1, this.BASKET_CONFIGS[srcCell.type].maxLevel);
@@ -458,7 +473,9 @@ class GameScene extends Phaser.Scene {
         if (candidates.length === 0) { this.flashBasket(basketRow, basketCol); return; }
 
         const [r, c] = Phaser.Utils.Array.GetRandom(candidates);
-        this.board[r][c] = { level: 1, type };
+        const bonusChance = this.BASKET_CONFIGS[type].energyBased ? 0.05 : 0.10;
+        const spawnLevel = Math.random() < bonusChance ? 2 : 1;
+        this.board[r][c] = { level: spawnLevel, type };
         this.updateCell(r, c);
 
         const obj = this.cellObjects[r][c];
@@ -658,6 +675,8 @@ class GameScene extends Phaser.Scene {
             }
         } else if (!this.basket3Unlocked && cust.type === 1) {
             this.time.delayedCall(300, () => this.dropItem(2, 1));
+        } else if (!this.basket4Unlocked && cust.type === 3) {
+            this.time.delayedCall(300, () => this.dropItem(4, 1));
         }
     }
 
@@ -712,6 +731,25 @@ class GameScene extends Phaser.Scene {
                 this.board[srcRow][srcCol] = { level: 0, type: null };
                 this.board[tgtRow][tgtCol] = { level: -1, type: 2 };
                 this.basket3Unlocked = true;
+                this.updateGrid();
+                this.isAnimating = false;
+            },
+        });
+    }
+
+    unlockBasket4(srcRow, srcCol, tgtRow, tgtCol) {
+        this.isAnimating = true;
+        const { x: tx, y: ty } = this.getCellPos(tgtRow, tgtCol);
+        const srcObj = this.cellObjects[srcRow][srcCol];
+
+        this.tweens.add({
+            targets: [srcObj.elem, srcObj.label],
+            x: tx, y: ty, scaleX: 0, scaleY: 0,
+            duration: 160, ease: 'Power2',
+            onComplete: () => {
+                this.board[srcRow][srcCol] = { level: 0, type: null };
+                this.board[tgtRow][tgtCol] = { level: -1, type: 4 };
+                this.basket4Unlocked = true;
                 this.updateGrid();
                 this.isAnimating = false;
             },
