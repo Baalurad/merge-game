@@ -23,7 +23,7 @@ A casual merge puzzle game built as a PWA for Svetlana's iPad. No App Store, ins
 - Sprite native size: **192×192px** (ELEM_SCALE = (CELL_SIZE - 12) / 192)
 
 ## Versioning
-Single source of truth: `version.js` → `const APP_VERSION = '0.1.3'`
+Single source of truth: `version.js` → `const APP_VERSION = '0.1.5'`
 Bump this on every release. The SW cache name is `merge-game-${APP_VERSION}`, so bumping forces a cache refresh on the player's device.
 
 ## Board data model
@@ -36,12 +36,19 @@ Elements can only merge if **same level AND same type**.
 
 ## Basket configs (`BASKET_CONFIGS` array in GameScene.js)
 Each entry: `{ color, labelColor, elemTextColor, spritePrefix, basketSprite, maxLevel }`
-- Index 0: egg / henhouse_basket — amber, maxLevel 8
-- Index 1: coffee / plantation_basket — purple, maxLevel 8
-- Index 2: potion / cauldron_basket — green, maxLevel 8
-- Index 3: ruby / ruby_basket — red, maxLevel 10
+- Index 0: egg / henhouse_basket — amber, maxLevel 8 — starts on board
+- Index 1: coffee / plantation_basket — purple, maxLevel 8 — unlocks via basket2Unlocked
+- Index 2: potion / cauldron_basket — green, maxLevel 8 — unlocks via basket3Unlocked
+- Index 3: ruby / ruby_basket — red, maxLevel 10, energyBased — starts on board
+- Index 4: crystal / crystal_basket — blue, maxLevel 10 — unlocks via basket4Unlocked
 
-Future basket types: push a new config entry and add corresponding sprites.
+## Basket unlock chain
+- **basket2 (coffee):** completing 2 egg orders drops 2 coffee L1 items → merge them → coffee basket appears
+- **basket3 (potion):** completing a coffee order drops potion L1 → merge two → potion basket appears
+- **basket4 (crystal):** completing a ruby order drops crystal L1 → merge two → crystal basket appears
+- State flags: `basket2Unlocked`, `basket3Unlocked`, `basket4Unlocked` — NOT persisted to localStorage (reset on reload)
+
+Future basket types: push a new config entry, add sprites, add basketNUnlocked flag and trigger in fulfillOrder/performMerge.
 
 ## Key mechanics
 - **Tap basket** → spawns level-1 element in a random empty cell within the 3×3 neighborhood
@@ -69,17 +76,21 @@ All concept files live in [`ideas/`](ideas/):
 | Файл | Статус | Описание |
 |---|---|---|
 | [`ideas/chain-ruby.md`](ideas/chain-ruby.md) | ✅ Готово | Рубиновая цепочка, 10 уровней, спрайты в `assets/ruby-cartoon/` |
-| [`ideas/chain-drops.md`](ideas/chain-drops.md) | 🔲 Концепт | Капли → кристалл (сапфир/изумруд), идея жены |
+| [`ideas/chain-drops.md`](ideas/chain-drops.md) | ✅ Готово | Капли → кристалл (сапфир), спрайты в `assets/crystal-cartoon/` |
 | [`ideas/chain-squares.md`](ideas/chain-squares.md) | 🔲 Концепт | Квадраты → корона (изумруд/аметист), идея жены |
 | [`ideas/feature-customer-panel.md`](ideas/feature-customer-panel.md) | 🔧 В работе | Свайп-панель, мульти-товар, спрайты заказчиков, анимации |
 
-Sprite generation pipeline: [`scripts/gen-sprites.js`](scripts/gen-sprites.js)  
-Ruby prompts & evaluations: [`scripts/ruby-chain-prompts.md`](scripts/ruby-chain-prompts.md)
+Sprite generation pipelines:
+- Ruby: [`scripts/gen-sprites.js`](scripts/gen-sprites.js), prompts in [`scripts/ruby-chain-prompts.md`](scripts/ruby-chain-prompts.md)
+- Crystal: [`scripts/gen-crystal-sprites.js`](scripts/gen-crystal-sprites.js), prompts embedded in CHAIN array
+- Basket variants: [`scripts/gen-crystal-baskets.js`](scripts/gen-crystal-baskets.js)
+
+Design principles (readability, color uniqueness, per-level evaluation): [`ideas/design-principles.md`](ideas/design-principles.md)
 
 ## Pending tasks
 1. ~~Multiple baskets + movement-based drag~~ ✓
 2. ~~Customer / order system~~ ✓
-3. Sprites — replace colored rectangles with themed PNG chains per basket type; **192×192px**, generated via AI API (Replicate / Recraft V3), downscaled with Lanczos + unsharp mask
+3. ~~Sprites — ruby chain~~ ✓ ~~Crystal chain~~ ✓ — egg/coffee/potion still use colored rectangles
 4. Animation polish — particle burst on merge, arc travel when fulfilling orders
 5. Customer panel v2 — multi-item orders, horizontal swipe, customer sprites (see [`ideas/feature-customer-panel.md`](ideas/feature-customer-panel.md))
 
