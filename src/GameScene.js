@@ -18,13 +18,15 @@ class GameScene extends Phaser.Scene {
         this.load.image('henhouse_basket', 'assets/eggs/henhouse_basket.png');
         this.load.image('coffee_basket', 'assets/coffee/basket_sack.png');
         this.load.image('cauldron_basket', 'assets/potions/cauldron_basket.png');
+
+        this.load.image('customer_witch_cafe_idle', 'assets/customers/witch_cafe_idle.png');
     }
 
     create() {
         this.COLS = 7;
         this.ROWS = 9;
         this.GAP = 8;
-        this.PANEL_H = 130;
+        this.PANEL_H = 160;
         this.MAX_CUSTOMERS = 4;
 
         const cellW = Math.floor((680 - (this.COLS - 1) * this.GAP) / this.COLS);
@@ -35,7 +37,9 @@ class GameScene extends Phaser.Scene {
         const gridW = this.COLS * this.CELL_SIZE + (this.COLS - 1) * this.GAP;
         const gridH = this.ROWS * this.CELL_SIZE + (this.ROWS - 1) * this.GAP;
         this.offsetX = (720 - gridW) / 2;
-        this.offsetY = 100 + this.PANEL_H + ((1180 - this.PANEL_H) - gridH) / 2;
+        const blockTop = 100 + Math.max(0, Math.floor((1180 - (this.PANEL_H + 6 + gridH)) / 2));
+        this.panelY  = blockTop + this.PANEL_H / 2;
+        this.offsetY = blockTop + this.PANEL_H + 6;
 
         this.BASKET_CONFIGS = [
             {
@@ -83,6 +87,8 @@ class GameScene extends Phaser.Scene {
 
         this.LABELS = ['', '1', '2', '3', '4', '5', '6', '7', '8', '9', '★'];
 
+        this.CUSTOMER_CHARS = ['witch_cafe'];
+
         this.customers = [];
         this.slotOccupied = new Array(this.MAX_CUSTOMERS).fill(false);
 
@@ -108,13 +114,14 @@ class GameScene extends Phaser.Scene {
 
         // Basket interaction state (movement-based: move >20px = drag, release = spawn)
         this.basketPressSrc = null;
-        this.lastPointerPos = { x: 0, y: 0 };
+        this.basketPressStart = null;
 
         // board[r][c] = { level, type }
         // level: -1 = basket, 0 = empty, 1-8 = element
         // type: basket index (0, 1, ...) or null for empty
         this.board = [];
-        this.initBoard();
+        const savedLoaded = this.loadSave();
+        if (!savedLoaded) this.initBoard();
         this.createUI();
         this.createCustomerPanel();
         this.createGrid();
@@ -123,10 +130,12 @@ class GameScene extends Phaser.Scene {
         this.input.on('pointerdown', this.onPointerDown, this);
         this.input.on('pointermove', this.onPointerMove, this);
         this.input.on('pointerup', this.onPointerUp, this);
+        if (savedLoaded && this._savedCustomers?.length > 0) this.restoreSavedCustomers();
         this.startCustomerSpawner();
         this.startEnergyRegen();
-        window.addEventListener('pagehide', () => this.saveRubyEnergy());
-        document.addEventListener('visibilitychange', () => { if (document.hidden) this.saveRubyEnergy(); });
+        const saveAll = () => { this.saveRubyEnergy(); this.saveGame(); };
+        window.addEventListener('pagehide', saveAll);
+        document.addEventListener('visibilitychange', () => { if (document.hidden) saveAll(); });
     }
 
     initBoard() {
@@ -142,7 +151,7 @@ class GameScene extends Phaser.Scene {
 
     createUI() {
         this.add.rectangle(360, 50, 720, 100, 0x16213e);
-        this.scoreText = this.add.text(24, 28, 'Score: 0', {
+        this.scoreText = this.add.text(24, 28, `Score: ${this.score}`, {
             fontSize: '28px', fill: '#ffffff', fontFamily: 'Arial', fontStyle: 'bold',
         });
         this.highScoreText = this.add.text(696, 28, `Best: ${this.highScore}`, {
@@ -159,6 +168,16 @@ class GameScene extends Phaser.Scene {
         this.add.text(720, 1276, `v${APP_VERSION}`, {
             fontSize: '18px', fill: '#2a2a4a', fontFamily: 'Arial',
         }).setOrigin(1, 1);
+
+        const resetBtn = this.add.text(696, 72, '↺', {
+            fontSize: '22px', fill: '#2a3a5a', fontFamily: 'Arial',
+        }).setOrigin(1, 0.5).setInteractive();
+        resetBtn.on('pointerover', () => resetBtn.setStyle({ fill: '#e74c3c' }));
+        resetBtn.on('pointerout', () => resetBtn.setStyle({ fill: '#2a3a5a' }));
+        resetBtn.on('pointerdown', () => {
+            localStorage.removeItem('mergeSave');
+            this.scene.restart();
+        });
     }
 
     createGrid() {
@@ -263,7 +282,6 @@ class GameScene extends Phaser.Scene {
 
     onPointerDown(pointer) {
         if (this.isAnimating) return;
-        this.lastPointerPos = { x: pointer.x, y: pointer.y };
 
         const cell = this.pointerToCell(pointer);
         if (!cell) return;
@@ -272,6 +290,7 @@ class GameScene extends Phaser.Scene {
 
         if (level === -1) {
             this.basketPressSrc = { row, col };
+            this.basketPressStart = { x: pointer.x, y: pointer.y };
             return;
         }
 
@@ -281,12 +300,11 @@ class GameScene extends Phaser.Scene {
     }
 
     onPointerMove(pointer) {
-        this.lastPointerPos = { x: pointer.x, y: pointer.y };
-
         if (this.basketPressSrc && !this.dragSrc) {
-            if (Math.abs(pointer.x - this.lastPointerPos.x) > 20 || Math.abs(pointer.y - this.lastPointerPos.y) > 20) {
+            if (Math.abs(pointer.x - this.basketPressStart.x) > 20 || Math.abs(pointer.y - this.basketPressStart.y) > 20) {
                 const { row, col } = this.basketPressSrc;
                 this.basketPressSrc = null;
+                this.basketPressStart = null;
                 this.startDrag(row, col, pointer, true);
             }
         }
@@ -373,6 +391,7 @@ class GameScene extends Phaser.Scene {
                 this.board[src.row][src.col] = { level: 0, type: null };
                 this.updateCell(src.row, src.col);
                 this.updateCell(tr, tc);
+                this.saveGame();
             }
             return;
         }
@@ -423,6 +442,7 @@ class GameScene extends Phaser.Scene {
                 this.scoreText.setText(`Score: ${this.score}`);
                 this.highScoreText.setText(`Best: ${this.highScore}`);
                 this.updateGrid();
+                this.saveGame();
 
                 const tgtObj = this.cellObjects[tgtRow][tgtCol];
                 this.tweens.add({
@@ -476,6 +496,7 @@ class GameScene extends Phaser.Scene {
         const spawnLevel = Math.random() < bonusChance ? 2 : 1;
         this.board[r][c] = { level: spawnLevel, type };
         this.updateCell(r, c);
+        this.saveGame();
 
         const obj = this.cellObjects[r][c];
         obj.elem.setScale(0);
@@ -538,18 +559,18 @@ class GameScene extends Phaser.Scene {
         const btn = this.add.text(cx, cy + 60, '[ Play Again ]', {
             fontSize: '30px', fill: '#2ecc71', fontFamily: 'Arial', fontStyle: 'bold',
         }).setOrigin(0.5).setDepth(11).setInteractive();
-        btn.on('pointerdown', () => this.scene.restart());
+        btn.on('pointerdown', () => { localStorage.removeItem('mergeSave'); this.scene.restart(); });
     }
 
     // ── CUSTOMER / ORDER SYSTEM ───────────────────────────
 
     createCustomerPanel() {
-        const py = 100 + this.PANEL_H / 2;
+        const py = this.panelY;
         this.add.rectangle(360, py, 720, this.PANEL_H, 0x0d1926);
-        this.add.rectangle(360, 100 + this.PANEL_H, 720, 2, 0x1a3a5c);
+        this.add.rectangle(360, py + this.PANEL_H / 2 + 1, 720, 2, 0x1a3a5c);
         for (let i = 0; i < this.MAX_CUSTOMERS; i++) {
             const sx = this.getSlotX(i);
-            this.add.rectangle(sx, py, 148, 110, 0x111e2e).setStrokeStyle(1, 0x1e3a5c);
+            this.add.rectangle(sx, py, 148, 150, 0x111e2e).setStrokeStyle(1, 0x1e3a5c);
         }
     }
 
@@ -568,61 +589,101 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    spawnCustomer() {
-        const slot = this.slotOccupied.indexOf(false);
-        if (slot === -1) return;
+    spawnCustomer(override = null) {
+        let slot, type, level, charId;
 
-        const types = new Set();
-        for (let r = 0; r < this.ROWS; r++)
-            for (let c = 0; c < this.COLS; c++)
-                if (this.board[r][c].level === -1) types.add(this.board[r][c].type);
-        if (types.size === 0) return;
+        if (override) {
+            ({ type, level, slot, charId } = override);
+            this.slotOccupied[slot] = true;
+        } else {
+            slot = this.slotOccupied.indexOf(false);
+            if (slot === -1) return;
 
-        // Max 1 order per energy-based type — exclude types that already have an active order
-        for (const c of this.customers) {
-            if (this.BASKET_CONFIGS[c.type].energyBased) types.delete(c.type);
+            const types = new Set();
+            for (let r = 0; r < this.ROWS; r++)
+                for (let c = 0; c < this.COLS; c++)
+                    if (this.board[r][c].level === -1) types.add(this.board[r][c].type);
+            if (types.size === 0) return;
+
+            // Max 1 order per energy-based type — exclude types that already have an active order
+            for (const c of this.customers) {
+                if (this.BASKET_CONFIGS[c.type].energyBased) types.delete(c.type);
+            }
+            if (types.size === 0) return;
+
+            type = Phaser.Utils.Array.GetRandom([...types]);
+            level = Phaser.Math.Between(2, 4);
+
+            const usedChars = new Set(this.customers.map(c => c.charId).filter(Boolean));
+            const availChars = this.CUSTOMER_CHARS.filter(id => !usedChars.has(id));
+            charId = availChars.length > 0
+                ? availChars[Math.floor(Math.random() * availChars.length)]
+                : null;
         }
-        if (types.size === 0) return;
 
-        this.slotOccupied[slot] = true;
-        const type = Phaser.Utils.Array.GetRandom([...types]);
-        const level = Phaser.Math.Between(2, 4);
         const sx = this.getSlotX(slot);
-        const py = 100 + this.PANEL_H / 2;
+        const py = this.panelY;
         const cfg = this.BASKET_CONFIGS[type];
         const EXPIRY = 45000;
         const isEnergyBased = !!cfg.energyBased;
 
-        const cardBg = this.add.rectangle(sx, py, 148, 110, 0x1a2e4a)
-            .setStrokeStyle(2, cfg.color).setDepth(2);
-        const elemImg = this.add.image(sx, py - 8, `${cfg.spritePrefix}_${level}`)
-            .setDisplaySize(74, 74).setDepth(3);
-        const levelLabel = this.placeLevelLabel(
-            this.add.text(0, 0, this.LABELS[level], this.levelLabelStyle(22)).setDepth(4),
-            sx, py - 8, 74
-        );
-        const timerBarBg = this.add.rectangle(sx, py + 46, 120, 6, 0x0d1926).setDepth(2);
-        const timerBarFill = this.add.rectangle(sx - 60, py + 46, 120, 6, 0x27ae60)
-            .setOrigin(0, 0.5).setDepth(3);
+        const expiryAt = override?.expiryAt ?? (isEnergyBased ? null : Date.now() + EXPIRY);
+        const remainingMs = expiryAt ? Math.max(1, expiryAt - Date.now()) : null;
 
-        const customer = { type, level, slot, objects: [cardBg, elemImg, levelLabel, timerBarBg, timerBarFill] };
+        const cardBg = this.add.rectangle(sx, py, 148, 150, 0x1a2e4a)
+            .setStrokeStyle(2, cfg.color).setDepth(2);
+
+        const cardObjs = [cardBg];
+        let elemImg, levelLabel;
+
+        if (charId) {
+            const charImg = this.add.image(sx, py + 63, `customer_${charId}_idle`)
+                .setDisplaySize(143, 190).setOrigin(0.5, 225 / 256).setDepth(3);
+            const badgeBg = this.add.rectangle(sx + 38, py + 33, 56, 56, 0x000000)
+                .setAlpha(0.6).setDepth(4);
+            elemImg = this.add.image(sx + 38, py + 33, `${cfg.spritePrefix}_${level}`)
+                .setDisplaySize(44, 44).setDepth(5);
+            levelLabel = this.placeLevelLabel(
+                this.add.text(0, 0, this.LABELS[level], this.levelLabelStyle(16)).setDepth(6),
+                sx + 38, py + 33, 44
+            );
+            cardObjs.push(charImg, badgeBg, elemImg, levelLabel);
+        } else {
+            elemImg = this.add.image(sx, py - 10, `${cfg.spritePrefix}_${level}`)
+                .setDisplaySize(74, 74).setDepth(3);
+            levelLabel = this.placeLevelLabel(
+                this.add.text(0, 0, this.LABELS[level], this.levelLabelStyle(22)).setDepth(4),
+                sx, py - 10, 74
+            );
+            cardObjs.push(elemImg, levelLabel);
+        }
+
+        const timerBarBg = this.add.rectangle(sx, py + 68, 140, 5, 0x0d1926).setDepth(7);
+        const timerBarFill = this.add.rectangle(sx - 70, py + 68, 140, 5, 0x27ae60)
+            .setOrigin(0, 0.5).setDepth(7);
+        cardObjs.push(timerBarBg, timerBarFill);
+
+        const customer = { type, level, slot, charId, objects: cardObjs, expiryAt };
         this.customers.push(customer);
 
         if (isEnergyBased) {
             timerBarBg.setVisible(false);
             timerBarFill.setVisible(false);
         } else {
+            const progress = Math.min(1, remainingMs / EXPIRY);
+            timerBarFill.setScale(progress, 1);
             customer.timerTween = this.tweens.add({
-                targets: timerBarFill, scaleX: 0, duration: EXPIRY, ease: 'Linear',
+                targets: timerBarFill, scaleX: 0, duration: remainingMs, ease: 'Linear',
             });
             customer.expiryTimer = this.time.addEvent({
-                delay: EXPIRY,
+                delay: remainingMs,
                 callback: () => {
                     const idx = this.customers.indexOf(customer);
                     if (idx >= 0) {
                         this.score -= 50;
                         this.scoreText.setText(`Score: ${this.score}`);
                         this.removeCustomer(idx);
+                        this.saveGame();
                         if (this.score < 0) {
                             this.time.delayedCall(200, () => this.showGameOver());
                         }
@@ -646,7 +707,7 @@ class GameScene extends Phaser.Scene {
     }
 
     pointerToCustomerIndex(px, py) {
-        if (py < 100 || py > 100 + this.PANEL_H) return -1;
+        if (py < this.panelY - this.PANEL_H / 2 || py > this.panelY + this.PANEL_H / 2) return -1;
         for (let i = 0; i < this.customers.length; i++) {
             const sx = this.getSlotX(this.customers[i].slot);
             if (px >= sx - 74 && px <= sx + 74) return i;
@@ -666,6 +727,7 @@ class GameScene extends Phaser.Scene {
         this.board[srcRow][srcCol] = { level: 0, type: null };
         this.updateCell(srcRow, srcCol);
         this.removeCustomer(customerIndex);
+        this.saveGame();
 
         if (!this.basket2Unlocked) {
             this.tasksCompleted++;
@@ -712,6 +774,7 @@ class GameScene extends Phaser.Scene {
                 this.board[tgtRow][tgtCol] = { level: -1, type: 1 };
                 this.basket2Unlocked = true;
                 this.updateGrid();
+                this.saveGame();
                 this.isAnimating = false;
             },
         });
@@ -731,6 +794,7 @@ class GameScene extends Phaser.Scene {
                 this.board[tgtRow][tgtCol] = { level: -1, type: 2 };
                 this.basket3Unlocked = true;
                 this.updateGrid();
+                this.saveGame();
                 this.isAnimating = false;
             },
         });
@@ -750,6 +814,7 @@ class GameScene extends Phaser.Scene {
                 this.board[tgtRow][tgtCol] = { level: -1, type: 4 };
                 this.basket4Unlocked = true;
                 this.updateGrid();
+                this.saveGame();
                 this.isAnimating = false;
             },
         });
@@ -873,5 +938,53 @@ class GameScene extends Phaser.Scene {
             },
             loop: true,
         });
+    }
+
+    // ── PERSISTENCE ───────────────────────────────────────
+
+    saveGame() {
+        const customers = this.customers.map(c => ({
+            type: c.type, level: c.level, slot: c.slot, charId: c.charId,
+            expiryAt: c.expiryAt,
+        }));
+        localStorage.setItem('mergeSave', JSON.stringify({
+            board: this.board,
+            basket2Unlocked: this.basket2Unlocked,
+            basket3Unlocked: this.basket3Unlocked,
+            basket4Unlocked: this.basket4Unlocked,
+            score: this.score,
+            tasksCompleted: this.tasksCompleted,
+            customers,
+        }));
+    }
+
+    loadSave() {
+        const raw = localStorage.getItem('mergeSave');
+        if (!raw) return false;
+        try {
+            const s = JSON.parse(raw);
+            if (!s.board) return false;
+            this.board = s.board;
+            this.basket2Unlocked = !!s.basket2Unlocked;
+            this.basket3Unlocked = !!s.basket3Unlocked;
+            this.basket4Unlocked = !!s.basket4Unlocked;
+            this.score = s.score || 0;
+            this.tasksCompleted = s.tasksCompleted || 0;
+            this._savedCustomers = s.customers || [];
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    restoreSavedCustomers() {
+        const now = Date.now();
+        for (const c of this._savedCustomers) {
+            const cfg = this.BASKET_CONFIGS[c.type];
+            if (!cfg) continue;
+            if (!cfg.energyBased && c.expiryAt && c.expiryAt <= now) continue;
+            this.spawnCustomer(c);
+        }
+        this._savedCustomers = [];
     }
 }
